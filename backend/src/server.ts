@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
 });
 
 // API Health Check
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'healthy',
     platform: 'MEAT CORNER',
@@ -69,25 +69,35 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Mounted Routes
+// Mounted Routes (Mounted with /api and direct prefix for Vercel serverless function compatibility)
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 app.use('/api', productRoutes);
+app.use('/', productRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/payments', paymentRoutes);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/delivery', deliveryRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/admin', adminRoutes);
 app.use('/api/customer', customerRoutes);
+app.use('/customer', customerRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
 
-const PORT = config.port;
-app.listen(PORT, () => {
-  console.log(`=================================================`);
-  console.log(`🍗 MEAT CORNER REST API running on port ${PORT}`);
-  console.log(`🚀 Ready for Customer, Admin & Delivery Portals`);
-  console.log(`=================================================`);
-});
+if (!process.env.VERCEL) {
+  const PORT = config.port;
+  app.listen(PORT, () => {
+    console.log(`=================================================`);
+    console.log(`🍗 MEAT CORNER REST API running on port ${PORT}`);
+    console.log(`🚀 Ready for Customer, Admin & Delivery Portals`);
+    console.log(`=================================================`);
+  });
+}
 
 export default app;
