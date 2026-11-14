@@ -1,4 +1,7 @@
-const API_BASE = '/api';
+const RAW_API = (import.meta.env.VITE_API_URL as string) || '';
+const API_BASE = RAW_API
+  ? (RAW_API.endsWith('/api') ? RAW_API : `${RAW_API.replace(/\/$/, '')}/api`)
+  : '/api';
 
 const getHeaders = () => {
   const headers: Record<string, string> = {
