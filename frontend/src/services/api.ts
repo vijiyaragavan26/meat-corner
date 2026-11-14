@@ -43,7 +43,6 @@ async function callApi<T>(
       headers: { ...getHeaders(), ...(options.headers || {}) },
     });
 
-    // If server responds with 405 Method Not Allowed or 404 Not Found on static Vercel host
     if (res.status === 405 || res.status === 404 || res.status === 502) {
       if (fallbackGenerator) {
         return { success: true, data: fallbackGenerator() };
@@ -303,7 +302,11 @@ export const api = {
     ]),
 
   // Delivery Portal
-  getDeliveryProfile: () => callApi('/delivery/profile', {}, () => DEMO_DELIVERY_PARTNERS[0]),
+  getDeliveryProfile: () =>
+    callApi('/delivery/profile', {}, () => ({
+      partner: DEMO_DELIVERY_PARTNERS[0],
+      user: DEMO_USERS['delivery@meatcorner.in'],
+    })),
 
   toggleDeliveryOnline: () =>
     callApi('/delivery/toggle-online', { method: 'PATCH' }, () => ({
@@ -311,14 +314,7 @@ export const api = {
     })),
 
   getDeliveryAssignments: () =>
-    callApi('/delivery/assignments', {}, () =>
-      liveOrders.map((o) => ({
-        id: 'asgn_' + o.id,
-        orderId: o.id,
-        status: 'ACCEPTED',
-        order: o,
-      }))
-    ),
+    callApi('/delivery/assignments', {}, () => liveOrders),
 
   acceptDeliveryAssignment: (id: string) =>
     callApi('/delivery/assignments/' + id + '/accept', { method: 'POST' }, () => ({ success: true })),
@@ -359,20 +355,40 @@ export const api = {
 
   // Admin Portal
   getAdminDashboard: () =>
-    callApi('/admin/dashboard', {}, () => ({
-      todayOrdersCount: liveOrders.length + 20,
-      todayRevenue: 14850,
-      activeDeliveriesCount: liveOrders.filter((o) => o.status === 'OUT_FOR_DELIVERY').length || 1,
-      lowStockCount: 2,
-      recentOrders: liveOrders,
-      salesChart: [
-        { time: '08:00', sales: 1200 },
-        { time: '10:00', sales: 3400 },
-        { time: '12:00', sales: 6800 },
-        { time: '14:00', sales: 8500 },
-        { time: '16:00', sales: 14850 },
-      ],
-    })),
+    callApi('/admin/dashboard', {}, () => {
+      const totalRev = liveOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 14850);
+      return {
+        metrics: {
+          totalRevenue: totalRev,
+          todayRevenue: 4850,
+          totalOrders: liveOrders.length + 18,
+          todayOrdersCount: liveOrders.length,
+          pendingOrders: liveOrders.filter((o) => o.status !== 'DELIVERED').length,
+          completedOrders: liveOrders.filter((o) => o.status === 'DELIVERED').length + 12,
+          cancelledOrders: 0,
+          totalCustomers: 24,
+          activePartners: DEMO_DELIVERY_PARTNERS.length,
+          lowStockItems: 2,
+          avgOrderValue: 345,
+        },
+        statusDistribution: {
+          OUT_FOR_DELIVERY: 1,
+          DELIVERED: 3,
+          PARTNER_ASSIGNED: 1,
+          PLACED: 1,
+        },
+        dailyTrends: [
+          { date: 'Day 1', revenue: 2100, orders: 7 },
+          { date: 'Day 2', revenue: 3400, orders: 11 },
+          { date: 'Day 3', revenue: 2900, orders: 9 },
+          { date: 'Day 4', revenue: 4200, orders: 14 },
+          { date: 'Day 5', revenue: 5100, orders: 16 },
+          { date: 'Day 6', revenue: 3800, orders: 12 },
+          { date: 'Day 7', revenue: 4850, orders: 15 },
+        ],
+        recentOrders: liveOrders,
+      };
+    }),
 
   getAdminOrders: (params?: Record<string, string>) =>
     callApi(
@@ -450,7 +466,14 @@ export const api = {
     callApi(
       '/admin/delivery-partners/' + id + '/status',
       { method: 'PATCH', body: JSON.stringify(body) },
-      () => ({ success: true })
+      () => {
+        const p = DEMO_DELIVERY_PARTNERS.find((part) => part.id === id);
+        if (p) {
+          Object.assign(p, body);
+          return p;
+        }
+        return { id, ...body };
+      }
     ),
 
   getAdminCustomers: () =>
@@ -476,39 +499,50 @@ export const api = {
     ]),
 
   toggleAdminCustomerStatus: (id: string) =>
-    callApi('/admin/customers/' + id + '/toggle-status', { method: 'PATCH' }, () => ({ success: true })),
+    callApi('/admin/customers/' + id + '/toggle-status', { method: 'PATCH' }, () => ({
+      id,
+      isActive: false,
+    })),
 
   getAdminCoupons: () =>
     callApi('/admin/coupons', {}, () => [
       {
         id: 'coup_1',
         code: 'MEATFIRST20',
+        description: 'Flat ₹20 off on fresh chicken',
         discountType: 'FLAT',
         discountValue: 20,
         minOrderValue: 199,
         isActive: true,
+        usedCount: 1,
       },
       {
         id: 'coup_2',
         code: 'FRESHCHICKEN10',
+        description: '10% discount on chicken breast & cuts',
         discountType: 'PERCENTAGE',
         discountValue: 10,
         minOrderValue: 299,
         isActive: true,
+        usedCount: 0,
       },
       {
         id: 'coup_3',
         code: 'WEEKEND50',
+        description: 'Flat ₹50 off on orders above ₹699',
         discountType: 'FLAT',
         discountValue: 50,
         minOrderValue: 699,
         isActive: true,
+        usedCount: 0,
       },
     ]),
 
   createAdminCoupon: (body: any) =>
     callApi('/admin/coupons', { method: 'POST', body: JSON.stringify(body) }, () => ({
       id: 'coup_' + Date.now(),
+      isActive: true,
+      usedCount: 0,
       ...body,
     })),
 
@@ -526,6 +560,12 @@ export const api = {
       perKmCharge: 8,
       minOrderAmount: 150,
       taxPercent: 5,
+      serviceableAreas: [
+        {
+          name: 'Erode Central & Outer',
+          pincodes: ['638001', '638002', '638009', '638011', '638116'],
+        },
+      ],
     })),
 
   updateAdminSettings: (body: any) =>
@@ -546,7 +586,13 @@ export const api = {
 
   replyAdminTicket: (id: string, body: any) =>
     callApi('/admin/tickets/' + id + '/reply', { method: 'PATCH', body: JSON.stringify(body) }, () => ({
-      success: true,
+      id,
+      orderNumber: 'MC-20261113-4117',
+      subject: 'Extra Turmeric Wash Request',
+      customerName: 'Priya Dharshini',
+      status: body.status || 'RESOLVED',
+      adminReply: body.adminReply || 'Thank you for contacting Meat Corner support.',
+      createdAt: new Date().toISOString(),
     })),
 
   getAdminReports: () =>
@@ -557,10 +603,21 @@ export const api = {
         averageOrderValue: 297.5,
         deliveredRate: 98.2,
       },
-      topSellingProducts: [
-        { name: 'Chicken Curry Cut (Skinless)', soldKg: 145, revenue: 36250 },
-        { name: 'Tender Chicken Breast Boneless', soldKg: 98, revenue: 31360 },
-        { name: 'Nattu Kozhi Country Chicken', soldKg: 42, revenue: 19320 },
+      topProducts: [
+        { name: 'Chicken Curry Cut (Skinless)', soldKg: 145, revenue: 36250, count: 88 },
+        { name: 'Tender Chicken Breast Boneless', soldKg: 98, revenue: 31360, count: 62 },
+        { name: 'Nattu Kozhi Country Chicken', soldKg: 42, revenue: 19320, count: 35 },
+        { name: 'Chicken Drumsticks (Tangdi Cut)', soldKg: 38, revenue: 11020, count: 29 },
       ],
+      ordersSummary: liveOrders.map((o) => ({
+        orderNumber: o.orderNumber,
+        customerName: o.customerName || o.deliveryAddressSnapshot?.recipientName || 'Customer',
+        date: new Date(o.createdAt).toLocaleDateString(),
+        itemsCount: o.items?.length || 1,
+        paymentMethod: o.paymentMethod || 'COD',
+        paymentStatus: o.paymentStatus || 'PAID',
+        status: o.status,
+        totalAmount: o.totalAmount,
+      })),
     })),
 };
