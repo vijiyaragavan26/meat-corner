@@ -327,9 +327,14 @@ export const api = {
     })),
 
   toggleDeliveryOnline: () =>
-    callApi('/delivery/toggle-online', { method: 'PATCH' }, () => ({
-      isOnline: true,
-    })),
+    callApi('/delivery/toggle-online', { method: 'PATCH' }, () => {
+      const p = DEMO_DELIVERY_PARTNERS[0];
+      if (p) {
+        p.isOnline = !p.isOnline;
+        return { isOnline: p.isOnline };
+      }
+      return { isOnline: true };
+    }),
 
   getDeliveryAssignments: () =>
     callApi('/delivery/assignments', {}, () => liveOrders),
