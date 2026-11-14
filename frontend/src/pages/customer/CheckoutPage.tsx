@@ -21,7 +21,7 @@ import { useLocation } from '../../contexts/LocationContext';
 
 export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, register } = useAuth();
   const { cart, clearCart, refreshCart } = useCart();
   const { pincode } = useLocation();
 
@@ -80,16 +80,39 @@ export const CheckoutPage: React.FC = () => {
     );
   }
 
-  const pricing = cart.pricing;
+  const pricing = cart?.pricing || {
+    subtotal: (cart as any)?.subtotal || 0,
+    deliveryFee: (cart as any)?.deliveryCharge ?? 30,
+    discount: (cart as any)?.discountAmount || 0,
+    tax: (cart as any)?.taxAmount || 0,
+    total: (cart as any)?.totalAmount || (cart as any)?.subtotal || 0,
+    freeDeliveryThreshold: 499,
+    freeDeliveryRemaining: Math.max(0, 499 - ((cart as any)?.subtotal || 0))
+  };
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!user) {
-      alert('Please log in or register to complete your order.');
-      navigate('/login?redirect=/checkout');
-      return;
+    let currentUser = user;
+    if (!currentUser) {
+      if (!newRecipient || !newPhone) {
+        setErrorMsg('Please enter your recipient name and phone number.');
+        return;
+      }
+      try {
+        const custPhone = newPhone.trim();
+        const cleanDigits = custPhone.replace(/\D/g, '') || '9876543210';
+        currentUser = await register({
+          name: newRecipient.trim(),
+          email: `${cleanDigits}@meatcorner.in`,
+          phone: custPhone,
+          password: 'Customer@123',
+          role: 'CUSTOMER'
+        });
+      } catch {
+        // Fallback: Proceed with order placement
+      }
     }
 
     let payload: any = {

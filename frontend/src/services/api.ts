@@ -93,7 +93,42 @@ let liveCart: any = {
   taxAmount: 0,
   discountAmount: 0,
   totalAmount: 30,
+  pricing: {
+    subtotal: 0,
+    deliveryFee: 30,
+    discount: 0,
+    tax: 0,
+    total: 30,
+    freeDeliveryThreshold: 499,
+    freeDeliveryRemaining: 499
+  }
 };
+
+function updateLiveCartPricing() {
+  const subtotal = liveCart.items.reduce((sum: number, it: any) => {
+    const price = it.product?.basePrice || 160;
+    return sum + price * (it.quantity || 1);
+  }, 0);
+  const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
+  const discount = liveCart.discountAmount || 0;
+  const tax = Math.round(subtotal * 0.05);
+  const total = Math.max(0, subtotal + deliveryFee - discount + tax);
+
+  liveCart.subtotal = subtotal;
+  liveCart.deliveryCharge = deliveryFee;
+  liveCart.taxAmount = tax;
+  liveCart.totalAmount = total;
+  liveCart.pricing = {
+    subtotal,
+    deliveryFee,
+    discount,
+    tax,
+    total,
+    freeDeliveryThreshold: 499,
+    freeDeliveryRemaining: Math.max(0, 499 - subtotal)
+  };
+  return liveCart;
+}
 
 export const api = {
   // Auth
@@ -152,7 +187,7 @@ export const api = {
     }),
 
   // Cart
-  getCart: () => callApi('/cart', {}, () => liveCart),
+  getCart: () => callApi('/cart', {}, () => updateLiveCartPricing()),
 
   addToCart: (body: any) =>
     callApi('/cart/items', { method: 'POST', body: JSON.stringify(body) }, () => {
@@ -167,39 +202,41 @@ export const api = {
         cleaningOption: body.cleaningOption || 'Standard Clean',
       };
       liveCart.items.push(newItem);
-      liveCart.subtotal += prod.basePrice * newItem.quantity;
-      liveCart.totalAmount = liveCart.subtotal + liveCart.deliveryCharge;
-      return liveCart;
+      return updateLiveCartPricing();
     }),
 
   updateCartItem: (id: string, body: any) =>
-    callApi('/cart/items/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => liveCart),
+    callApi('/cart/items/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => {
+      const it = liveCart.items.find((i: any) => i.id === id);
+      if (it && body.quantity !== undefined) {
+        it.quantity = body.quantity;
+      }
+      return updateLiveCartPricing();
+    }),
 
   removeCartItem: (id: string) =>
     callApi('/cart/items/' + id, { method: 'DELETE' }, () => {
       liveCart.items = liveCart.items.filter((i: any) => i.id !== id);
-      return liveCart;
+      return updateLiveCartPricing();
     }),
 
   clearCart: () =>
     callApi('/cart', { method: 'DELETE' }, () => {
       liveCart.items = [];
-      liveCart.subtotal = 0;
-      liveCart.totalAmount = 0;
-      return liveCart;
+      liveCart.discountAmount = 0;
+      return updateLiveCartPricing();
     }),
 
   applyCoupon: (code: string) =>
     callApi('/cart/apply-coupon', { method: 'POST', body: JSON.stringify({ code }) }, () => {
       liveCart.discountAmount = 20;
-      liveCart.totalAmount = Math.max(0, liveCart.subtotal + liveCart.deliveryCharge - 20);
-      return liveCart;
+      return updateLiveCartPricing();
     }),
 
   removeCoupon: () =>
     callApi('/cart/remove-coupon', { method: 'POST' }, () => {
       liveCart.discountAmount = 0;
-      return liveCart;
+      return updateLiveCartPricing();
     }),
 
   // Orders
@@ -213,7 +250,7 @@ export const api = {
         subtotal: liveCart.subtotal || 320,
         deliveryCharge: 30,
         items: [...liveCart.items],
-        deliveryAddressSnapshot: body.deliveryAddress || {
+        deliveryAddressSnapshot: body.newAddress || body.deliveryAddress || {
           recipientName: 'Priya Dharshini',
           phone: '+919876543210',
           line1: 'Plot No 24, Gandhi Nagar',
