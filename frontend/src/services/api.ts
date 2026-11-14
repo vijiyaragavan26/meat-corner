@@ -84,7 +84,24 @@ async function callApi<T>(
 }
 
 // In-Memory state for demo mode
-let liveOrders = [...DEMO_ORDERS];
+function getLiveOrders(): any[] {
+  try {
+    const saved = localStorage.getItem('meat_corner_live_orders');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return [...DEMO_ORDERS];
+}
+
+function saveLiveOrders(orders: any[]) {
+  try {
+    localStorage.setItem('meat_corner_live_orders', JSON.stringify(orders));
+  } catch {}
+}
 let liveCart: any = {
   id: 'cart_demo',
   items: [],
@@ -242,35 +259,92 @@ export const api = {
   // Orders
   createOrder: (body: any) =>
     callApi('/orders', { method: 'POST', body: JSON.stringify(body) }, () => {
+      const currentOrders = getLiveOrders();
+      const addr = body.newAddress || body.deliveryAddress || {};
+      const recipient = addr.recipientName || 'Valued Customer';
+      const phone = addr.phone || '+919876543210';
+      const orderId = 'ord_' + Date.now();
+      const orderNumber = 'MC-' + Math.floor(100000 + Math.random() * 900000);
+      const subtotal = liveCart.subtotal || liveCart.pricing?.subtotal || 500;
+      const deliveryFee = liveCart.deliveryCharge ?? (subtotal >= 499 ? 0 : 30);
+      const tax = liveCart.taxAmount ?? Math.round(subtotal * 0.05);
+      const discount = liveCart.discountAmount || 0;
+      const total = liveCart.totalAmount ?? (subtotal + deliveryFee - discount + tax);
+
+      const items = liveCart.items.length > 0
+        ? liveCart.items.map((it: any, idx: number) => ({
+            id: it.id || `oi_${Date.now()}_${idx}`,
+            productId: it.productId || 'prod_1',
+            productName: it.product?.name || 'Chicken Curry Cut (Skinless)',
+            variantLabel: it.variant?.label || '500g',
+            quantity: it.quantity || 1,
+            unitPrice: it.product?.basePrice || 250,
+            totalPrice: (it.product?.basePrice || 250) * (it.quantity || 1),
+            cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
+            cleaningOption: it.cleaningOption || 'Standard Clean'
+          }))
+        : [
+            {
+              id: 'oi_' + Date.now(),
+              productId: 'prod_1',
+              productName: 'Chicken Curry Cut (Skinless)',
+              variantLabel: '500g',
+              quantity: 2,
+              unitPrice: 250,
+              totalPrice: 500,
+              cuttingOption: 'Curry Cut (Medium)',
+              cleaningOption: 'Standard Clean'
+            }
+          ];
+
       const newOrder = {
-        id: 'ord_' + Date.now(),
-        orderNumber: 'MC-' + Math.floor(100000 + Math.random() * 900000),
-        status: 'PLACED',
-        totalAmount: liveCart.totalAmount || 350,
-        subtotal: liveCart.subtotal || 320,
-        deliveryCharge: 30,
-        items: [...liveCart.items],
-        deliveryAddressSnapshot: body.newAddress || body.deliveryAddress || {
-          recipientName: 'Priya Dharshini',
-          phone: '+919876543210',
-          line1: 'Plot No 24, Gandhi Nagar',
-          city: 'Erode',
-          pincode: '638116',
+        id: orderId,
+        orderNumber: orderNumber,
+        customerId: 'usr_cust_demo',
+        customerName: recipient,
+        customerPhone: phone,
+        status: 'CONFIRMED',
+        paymentMethod: body.paymentMethod || 'COD',
+        paymentStatus: body.paymentMethod === 'RAZORPAY' ? 'PAID' : 'PENDING',
+        totalAmount: total,
+        subtotal: subtotal,
+        deliveryCharge: deliveryFee,
+        discountAmount: discount,
+        taxAmount: tax,
+        items: items,
+        deliveryAddressSnapshot: {
+          recipientName: recipient,
+          phone: phone,
+          line1: addr.line1 || '54 Perundurai Road',
+          line2: addr.line2 || '',
+          area: addr.area || 'Kanjikovil',
+          city: addr.city || 'Erode',
+          pincode: addr.pincode || '638116',
+          lat: addr.lat || 11.3850,
+          lng: addr.lng || 77.5920
         },
-        deliverySlot: 'Express (30-45 mins)',
+        deliveryPartnerId: 'dp_1',
+        deliveryPartner: DEMO_DELIVERY_PARTNERS[0],
+        deliverySlot: body.deliverySlot || 'Express (30-45 mins)',
         deliveryOtp: String(Math.floor(1000 + Math.random() * 9000)),
+        distanceKm: 2.4,
+        estimatedMinutes: 30,
         createdAt: new Date().toISOString(),
       };
-      liveOrders.unshift(newOrder);
+
+      const updated = [newOrder, ...currentOrders];
+      saveLiveOrders(updated);
       liveCart.items = [];
+      updateLiveCartPricing();
       return newOrder;
     }),
 
-  getCustomerOrders: () => callApi('/orders', {}, () => liveOrders),
+  getCustomerOrders: () => callApi('/orders', {}, () => getLiveOrders()),
 
   getOrderById: (id: string) =>
     callApi('/orders/' + id, {}, () => {
-      return liveOrders.find((o) => o.id === id || o.orderNumber === id) || liveOrders[0];
+      const orders = getLiveOrders();
+      return orders.find((o) => o.id === id || o.orderNumber === id) || orders[0];
     }),
 
   // Payment
@@ -374,7 +448,10 @@ export const api = {
     }),
 
   getDeliveryAssignments: () =>
-    callApi('/delivery/assignments', {}, () => liveOrders),
+    callApi('/delivery/assignments', {}, () => {
+      const orders = getLiveOrders();
+      return orders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
+    }),
 
   acceptDeliveryAssignment: (id: string) =>
     callApi('/delivery/assignments/' + id + '/accept', { method: 'POST' }, () => ({ success: true })),
@@ -386,8 +463,12 @@ export const api = {
 
   updateDeliveryOrderStatus: (id: string, status: string) =>
     callApi('/delivery/orders/' + id + '/status', { method: 'PATCH', body: JSON.stringify({ status }) }, () => {
-      const ord = liveOrders.find((o) => o.id === id);
-      if (ord) ord.status = status;
+      const orders = getLiveOrders();
+      const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+      if (ord) {
+        ord.status = status;
+        saveLiveOrders(orders);
+      }
       return { success: true, order: ord };
     }),
 
@@ -396,8 +477,12 @@ export const api = {
       '/delivery/orders/' + id + '/verify-otp',
       { method: 'POST', body: JSON.stringify({ otp, cashCollected }) },
       () => {
-        const ord = liveOrders.find((o) => o.id === id);
-        if (ord) ord.status = 'DELIVERED';
+        const orders = getLiveOrders();
+        const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+        if (ord) {
+          ord.status = 'DELIVERED';
+          saveLiveOrders(orders);
+        }
         return { success: true, verified: true };
       }
     ),
@@ -416,16 +501,17 @@ export const api = {
   // Admin Portal
   getAdminDashboard: () =>
     callApi('/admin/dashboard', {}, () => {
-      const totalRev = liveOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 14850);
+      const orders = getLiveOrders();
+      const totalRev = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 14850);
       return {
         metrics: {
           totalRevenue: totalRev,
           todayRevenue: 4850,
-          totalOrders: liveOrders.length + 18,
-          todayOrders: liveOrders.length,
-          todayOrdersCount: liveOrders.length,
-          pendingOrders: liveOrders.filter((o) => o.status !== 'DELIVERED').length,
-          completedOrders: liveOrders.filter((o) => o.status === 'DELIVERED').length + 12,
+          totalOrders: orders.length + 18,
+          todayOrders: orders.length,
+          todayOrdersCount: orders.length,
+          pendingOrders: orders.filter((o) => o.status !== 'DELIVERED').length,
+          completedOrders: orders.filter((o) => o.status === 'DELIVERED').length + 12,
           cancelledOrders: 0,
           totalCustomers: 24,
           activePartners: DEMO_DELIVERY_PARTNERS.length,
@@ -447,7 +533,7 @@ export const api = {
           { date: 'Day 6', revenue: 3800, orders: 12 },
           { date: 'Day 7', revenue: 4850, orders: 15 },
         ],
-        recentOrders: liveOrders,
+        recentOrders: orders,
       };
     }),
 
@@ -455,14 +541,22 @@ export const api = {
     callApi(
       `/orders/admin/all${params ? '?' + new URLSearchParams(params).toString() : ''}`,
       {},
-      () => liveOrders
+      () => {
+        const orders = getLiveOrders();
+        if (params?.status && params.status !== 'ALL') {
+          return orders.filter((o) => o.status === params.status);
+        }
+        return orders;
+      }
     ),
 
   updateAdminOrderStatus: (id: string, body: any) =>
     callApi('/orders/admin/' + id + '/status', { method: 'PATCH', body: JSON.stringify(body) }, () => {
-      const ord = liveOrders.find((o) => o.id === id);
+      const orders = getLiveOrders();
+      const ord = orders.find((o) => o.id === id || o.orderNumber === id);
       if (ord) {
         ord.status = body.status;
+        saveLiveOrders(orders);
       }
       return { success: true, order: ord };
     }),
@@ -472,12 +566,14 @@ export const api = {
       '/orders/admin/' + id + '/assign-partner',
       { method: 'POST', body: JSON.stringify({ deliveryPartnerId }) },
       () => {
-        const ord = liveOrders.find((o) => o.id === id);
+        const orders = getLiveOrders();
+        const ord = orders.find((o) => o.id === id || o.orderNumber === id);
         const partner = DEMO_DELIVERY_PARTNERS.find((p) => p.id === deliveryPartnerId) || DEMO_DELIVERY_PARTNERS[0];
         if (ord) {
           ord.deliveryPartnerId = partner.id;
           ord.deliveryPartner = partner;
           ord.status = 'PARTNER_ASSIGNED';
+          saveLiveOrders(orders);
         }
         return { success: true, order: ord };
       }
@@ -670,7 +766,7 @@ export const api = {
         { name: 'Nattu Kozhi Country Chicken', soldKg: 42, revenue: 19320, count: 35 },
         { name: 'Chicken Drumsticks (Tangdi Cut)', soldKg: 38, revenue: 11020, count: 29 },
       ],
-      ordersSummary: liveOrders.map((o) => ({
+      ordersSummary: getLiveOrders().map((o) => ({
         orderNumber: o.orderNumber,
         customerName: o.customerName || o.deliveryAddressSnapshot?.recipientName || 'Customer',
         date: new Date(o.createdAt).toLocaleDateString(),
