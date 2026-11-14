@@ -226,7 +226,7 @@ ON CONFLICT ("id") DO NOTHING;
 
 -- 15. REFUNDS
 INSERT INTO "Refunds" ("id", "orderId", "amount", "reason", "status", "createdAt", "updatedAt")
-SELECT 'ref_1', o."id", 50.0, 'Promotional cash adjustment / Customer goodwill', 'COMPLETED', NOW(), NOW()
+SELECT 'ref_1', o."id", 50.0, 'Promotional cash adjustment / Customer goodwill', 'PROCESSED', NOW(), NOW()
 FROM "Orders" o WHERE o."orderNumber" = 'MC-20261113-8691'
 ON CONFLICT ("id") DO NOTHING;
 
