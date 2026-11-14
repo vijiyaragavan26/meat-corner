@@ -23,8 +23,19 @@ import { useAuth } from '../../contexts/AuthContext';
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isLoading } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-10 h-10 border-4 border-brand-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-gray-500 font-semibold">Verifying Administrator Session...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user || user.role !== 'ADMIN') {
     return (

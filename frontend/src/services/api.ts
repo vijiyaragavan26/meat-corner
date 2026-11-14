@@ -31,7 +31,7 @@ const getHeaders = () => {
   return headers;
 };
 
-// Resilient API Caller that automatically falls back to demo mode if backend is unreachable or returns 405
+// Resilient API Caller that automatically falls back to demo mode if backend is unreachable, returns 405, or serves HTML SPA
 async function callApi<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -43,18 +43,36 @@ async function callApi<T>(
       headers: { ...getHeaders(), ...(options.headers || {}) },
     });
 
-    if (res.status === 405 || res.status === 404 || res.status === 502) {
+    // Handle common static host errors (405 Method Not Allowed, 404, 502, 500)
+    if (res.status === 405 || res.status === 404 || res.status === 502 || res.status === 500) {
       if (fallbackGenerator) {
         return { success: true, data: fallbackGenerator() };
       }
     }
 
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
+    // Detect if static server (e.g. Vercel SPA rewrite) returned HTML instead of JSON
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
       if (fallbackGenerator) {
         return { success: true, data: fallbackGenerator() };
       }
-      throw new Error(json.message || `Request failed with status ${res.status}`);
+    }
+
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      if (fallbackGenerator) {
+        return { success: true, data: fallbackGenerator() };
+      }
+    }
+
+    if (!res.ok || !json || json.success === false) {
+      if (fallbackGenerator) {
+        return { success: true, data: fallbackGenerator() };
+      }
+      throw new Error(json?.message || `Request failed with status ${res.status}`);
     }
     return json;
   } catch (err: any) {
@@ -362,6 +380,7 @@ export const api = {
           totalRevenue: totalRev,
           todayRevenue: 4850,
           totalOrders: liveOrders.length + 18,
+          todayOrders: liveOrders.length,
           todayOrdersCount: liveOrders.length,
           pendingOrders: liveOrders.filter((o) => o.status !== 'DELIVERED').length,
           completedOrders: liveOrders.filter((o) => o.status === 'DELIVERED').length + 12,

@@ -17,7 +17,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('meat_corner_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState<string | null>(localStorage.getItem('meat_corner_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -25,14 +32,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (token) {
       api.getMe()
         .then((res) => {
-          if (res.success && res.data.user) {
+          if (res.success && res.data?.user) {
             setUser(res.data.user);
+            localStorage.setItem('meat_corner_user', JSON.stringify(res.data.user));
           } else {
-            logout();
+            const saved = localStorage.getItem('meat_corner_user');
+            if (saved) {
+              setUser(JSON.parse(saved));
+            } else {
+              logout();
+            }
           }
         })
         .catch(() => {
-          logout();
+          const saved = localStorage.getItem('meat_corner_user');
+          if (saved) {
+            setUser(JSON.parse(saved));
+          } else {
+            logout();
+          }
         })
         .finally(() => setIsLoading(false));
     } else {
@@ -44,6 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const res = await api.login(credentials);
     if (res.success && res.data.token) {
       localStorage.setItem('meat_corner_token', res.data.token);
+      localStorage.setItem('meat_corner_user', JSON.stringify(res.data.user));
       setToken(res.data.token);
       setUser(res.data.user);
       return res.data.user;
@@ -55,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const res = await api.register(data);
     if (res.success && res.data.token) {
       localStorage.setItem('meat_corner_token', res.data.token);
+      localStorage.setItem('meat_corner_user', JSON.stringify(res.data.user));
       setToken(res.data.token);
       setUser(res.data.user);
       return res.data.user;
@@ -64,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('meat_corner_token');
+    localStorage.removeItem('meat_corner_user');
     setToken(null);
     setUser(null);
   };
