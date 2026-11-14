@@ -1,0 +1,499 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Search,
+  Filter,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Printer,
+  Bike,
+  AlertCircle,
+  Eye,
+  RefreshCw,
+  X
+} from 'lucide-react';
+import { api } from '../../services/api';
+import { Order, DeliveryPartner, OrderStatus } from '../../types';
+
+export const AdminOrdersPage: React.FC = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [partners, setPartners] = useState<DeliveryPartner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
+  const [rejectionReason, setRejectionReason] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const [ordRes, partRes] = await Promise.all([
+        api.getAdminOrders(statusFilter !== 'ALL' ? { status: statusFilter } : undefined),
+        api.getAdminDeliveryPartners()
+      ]);
+      if (ordRes.success) setOrders(ordRes.data);
+      if (partRes.success) setPartners(partRes.data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [statusFilter]);
+
+  const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
+    setIsUpdating(true);
+    try {
+      const res = await api.updateAdminOrderStatus(orderId, {
+        status,
+        rejectionReason: reason,
+        cancellationReason: reason
+      });
+      if (res.success) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.data : o)));
+        if (selectedOrder?.id === orderId) {
+          setSelectedOrder(res.data);
+        }
+      }
+    } catch (err: any) {
+      alert(err.message || 'Status update failed');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleAssignPartner = async (orderId: string) => {
+    if (!selectedPartnerId) {
+      alert('Please select an active delivery partner.');
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const res = await api.assignDeliveryPartner(orderId, selectedPartnerId);
+      if (res.success) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.data : o)));
+        if (selectedOrder?.id === orderId) {
+          setSelectedOrder(res.data);
+        }
+        alert('Delivery partner assigned successfully!');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to assign delivery partner');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      o.orderNumber.toLowerCase().includes(q) ||
+      o.customerName?.toLowerCase().includes(q) ||
+      o.customerPhone?.includes(q)
+    );
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Page Title & Search Filter */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-charcoal">Order Management & Fulfillment</h1>
+          <p className="text-xs text-gray-500">Live order butchery queue, partner assignments, and customer deliveries</p>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search order #, customer, phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-xs font-semibold text-charcoal outline-none focus:border-brand-700 w-64 shadow-sm"
+            />
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+          </div>
+
+          <button
+            onClick={fetchOrders}
+            className="p-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-brand-700 hover:bg-gray-50 shadow-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Status Filter Tabs */}
+      <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-none">
+        {[
+          'ALL',
+          'PLACED',
+          'CONFIRMED',
+          'PREPARING',
+          'READY_FOR_PICKUP',
+          'PARTNER_ASSIGNED',
+          'PICKED_UP',
+          'OUT_FOR_DELIVERY',
+          'DELIVERED',
+          'CANCELLED'
+        ].map((st) => (
+          <button
+            key={st}
+            onClick={() => setStatusFilter(st)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
+              statusFilter === st
+                ? 'bg-charcoal text-white shadow'
+                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            {st.replace(/_/g, ' ')}
+          </button>
+        ))}
+      </div>
+
+      {/* Orders Table */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-400 font-bold uppercase tracking-wider">
+                <th className="py-3 px-4">Order Details</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Items & Cuts</th>
+                <th className="py-3 px-4">Payment</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">Delivery Partner</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                    Loading orders...
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                    No chicken orders found matching criteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50/80 transition">
+                    {/* Order Details */}
+                    {/* Order Details */}
+                    <td className="py-3.5 px-4">
+                      <span className="font-mono font-bold text-charcoal block">{order.orderNumber}</span>
+                      <span className="text-[10px] text-gray-400">
+                        {order.createdAt && !isNaN(new Date(order.createdAt).getTime())
+                          ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : 'Recent'} • {order.deliverySlot}
+                      </span>
+                    </td>
+
+                    {/* Customer */}
+                    <td className="py-3.5 px-4">
+                      <span className="font-bold text-charcoal block">{order.customerName || 'Customer'}</span>
+                      <span className="text-[11px] text-gray-500 font-mono">{order.customerPhone}</span>
+                      <span className="text-[10px] text-gray-400 block truncate max-w-[140px]">
+                        {order.deliveryAddressSnapshot?.area}
+                      </span>
+                    </td>
+
+                    {/* Items */}
+                    <td className="py-3.5 px-4">
+                      <span className="font-bold text-charcoal">{order.items.length} items</span>
+                      <div className="text-[10px] text-gray-500 truncate max-w-[160px]">
+                        {order.items.map((it) => it.productName).join(', ')}
+                      </div>
+                    </td>
+
+                    {/* Payment */}
+                    <td className="py-3.5 px-4">
+                      <span className="font-black text-brand-700 block text-sm">₹{order.totalAmount}</span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                        {order.paymentMethod} • {order.paymentStatus}
+                      </span>
+                    </td>
+
+                    {/* Status Direct Selector */}
+                    <td className="py-3.5 px-4">
+                      <select
+                        value={order.status}
+                        disabled={isUpdating}
+                        onChange={(e) => handleStatusUpdate(order.id, e.target.value as OrderStatus)}
+                        className={`text-[10px] font-bold px-2 py-1 rounded-xl uppercase tracking-wider outline-none border cursor-pointer shadow-sm transition ${
+                          order.status === 'DELIVERED'
+                            ? 'bg-green-100 text-green-900 border-green-300'
+                            : order.status === 'CANCELLED' || order.status === 'REJECTED'
+                            ? 'bg-red-100 text-red-900 border-red-300'
+                            : order.status === 'OUT_FOR_DELIVERY' || order.status === 'PICKED_UP'
+                            ? 'bg-blue-100 text-blue-900 border-blue-300'
+                            : 'bg-brand-50 text-brand-900 border-brand-200'
+                        }`}
+                      >
+                        <option value="PLACED">Placed</option>
+                        <option value="CONFIRMED">Confirmed</option>
+                        <option value="PREPARING">Preparing</option>
+                        <option value="READY_FOR_PICKUP">Ready for Pickup</option>
+                        <option value="PARTNER_ASSIGNED">Partner Assigned</option>
+                        <option value="PICKED_UP">Picked Up</option>
+                        <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+                        <option value="DELIVERED">Delivered</option>
+                        <option value="CANCELLED">Cancelled</option>
+                      </select>
+                    </td>
+
+                    {/* Partner */}
+                    <td className="py-3.5 px-4">
+                      {order.deliveryPartnerName ? (
+                        <div className="flex items-center space-x-1.5 text-emerald-800 font-semibold text-xs">
+                          <Bike className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{order.deliveryPartnerName}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded">
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 text-right">
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        className="bg-charcoal hover:bg-black text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
+                      >
+                        Manage
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal: Order Details & Status Workflow Management */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative border border-gray-100 max-h-[90vh] overflow-y-auto space-y-6">
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-charcoal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div>
+              <span className="text-xs font-mono font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded-full">
+                {selectedOrder.orderNumber}
+              </span>
+              <h3 className="text-xl font-black text-charcoal mt-2">Manage Chicken Order</h3>
+              <p className="text-xs text-gray-500">
+                Customer: <strong>{selectedOrder.customerName}</strong> ({selectedOrder.customerPhone})
+              </p>
+            </div>
+
+            {/* Status Workflow Action Buttons */}
+            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                  Current Status: <strong className="text-brand-700 bg-brand-50 px-2 py-0.5 rounded-lg">{selectedOrder.status.replace(/_/g, ' ')}</strong>
+                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Change Status:</span>
+                  <select
+                    value={selectedOrder.status}
+                    disabled={isUpdating}
+                    onChange={(e) => handleStatusUpdate(selectedOrder.id, e.target.value as OrderStatus)}
+                    className="bg-white border border-gray-300 rounded-xl px-2.5 py-1 text-xs font-bold text-charcoal outline-none focus:border-brand-700 cursor-pointer shadow-sm"
+                  >
+                    <option value="PLACED">Placed</option>
+                    <option value="CONFIRMED">Confirmed</option>
+                    <option value="PREPARING">Preparing</option>
+                    <option value="READY_FOR_PICKUP">Ready for Pickup</option>
+                    <option value="PARTNER_ASSIGNED">Partner Assigned</option>
+                    <option value="PICKED_UP">Picked Up</option>
+                    <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+                    <option value="DELIVERED">Delivered</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quick Workflow Action Buttons */}
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                {selectedOrder.status === 'PLACED' && (
+                  <button
+                    disabled={isUpdating}
+                    onClick={() => handleStatusUpdate(selectedOrder.id, 'CONFIRMED')}
+                    className="bg-green-700 hover:bg-green-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
+                  >
+                    Confirm Order
+                  </button>
+                )}
+
+                {['PLACED', 'CONFIRMED', 'PARTNER_ASSIGNED'].includes(selectedOrder.status) && (
+                  <button
+                    disabled={isUpdating}
+                    onClick={() => handleStatusUpdate(selectedOrder.id, 'PREPARING')}
+                    className="bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
+                  >
+                    Start Butchery (Preparing)
+                  </button>
+                )}
+
+                {['PREPARING', 'CONFIRMED', 'PARTNER_ASSIGNED'].includes(selectedOrder.status) && (
+                  <button
+                    disabled={isUpdating}
+                    onClick={() => handleStatusUpdate(selectedOrder.id, 'READY_FOR_PICKUP')}
+                    className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
+                  >
+                    Mark Ready for Pickup
+                  </button>
+                )}
+
+                {['READY_FOR_PICKUP', 'PARTNER_ASSIGNED', 'PICKED_UP'].includes(selectedOrder.status) && (
+                  <button
+                    disabled={isUpdating}
+                    onClick={() => handleStatusUpdate(selectedOrder.id, 'OUT_FOR_DELIVERY')}
+                    className="bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
+                  >
+                    Mark Out for Delivery
+                  </button>
+                )}
+
+                {selectedOrder.status === 'OUT_FOR_DELIVERY' && (
+                  <button
+                    disabled={isUpdating}
+                    onClick={() => handleStatusUpdate(selectedOrder.id, 'DELIVERED')}
+                    className="bg-green-700 hover:bg-green-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
+                  >
+                    Mark Delivered (Paid)
+                  </button>
+                )}
+
+                {selectedOrder.status !== 'DELIVERED' && selectedOrder.status !== 'CANCELLED' && (
+                  <button
+                    disabled={isUpdating}
+                    onClick={() => {
+                      const reason = prompt('Please enter cancellation reason:');
+                      if (reason) handleStatusUpdate(selectedOrder.id, 'CANCELLED', reason);
+                    }}
+                    className="bg-red-100 hover:bg-red-200 text-red-800 font-bold text-xs px-3 py-1.5 rounded-xl transition"
+                  >
+                    Cancel Order
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Delivery Partner Assignment Section */}
+            <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80 space-y-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                Assign Delivery Partner:
+              </span>
+              <div className="flex space-x-2">
+                <select
+                  value={selectedPartnerId}
+                  onChange={(e) => setSelectedPartnerId(e.target.value)}
+                  className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-charcoal outline-none focus:border-emerald-700"
+                >
+                  <option value="">-- Choose verified rider --</option>
+                  {partners
+                    .filter((p) => p.approvalStatus === 'APPROVED')
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName} ({p.phone}) {p.isOnline ? '🟢 Online' : '⚪ Offline'}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={isUpdating || !selectedPartnerId}
+                  onClick={() => handleAssignPartner(selectedOrder.id)}
+                  className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+                >
+                  Assign Rider
+                </button>
+              </div>
+            </div>
+
+            {/* Items Breakdown */}
+            <div>
+              <h4 className="font-bold text-xs text-charcoal uppercase tracking-wider mb-2">Ordered Chicken Cuts</h4>
+              <div className="divide-y divide-gray-100 bg-gray-50 rounded-2xl p-4">
+                {selectedOrder.items.map((it) => (
+                  <div key={it.id} className="py-2 flex justify-between items-center text-xs">
+                    <div>
+                      <h5 className="font-bold text-charcoal">{it.productName}</h5>
+                      <p className="text-[11px] text-gray-500">
+                        {it.variantLabel} • Cut: {it.cuttingOption} • {it.cleaningOption}
+                      </p>
+                      <span className="text-gray-400">Qty: {it.quantity}</span>
+                    </div>
+                    <span className="font-extrabold text-charcoal">₹{it.totalPrice}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Address & Payment Details */}
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="bg-gray-50 p-3 rounded-2xl space-y-1">
+                <span className="font-bold uppercase text-gray-400 block text-[10px]">Destination</span>
+                <p className="font-bold text-charcoal">{selectedOrder.deliveryAddressSnapshot?.recipientName}</p>
+                <p className="text-gray-500">{selectedOrder.deliveryAddressSnapshot?.line1}, {selectedOrder.deliveryAddressSnapshot?.area}</p>
+                <p className="text-gray-500">{selectedOrder.deliveryAddressSnapshot?.city} - {selectedOrder.deliveryAddressSnapshot?.pincode}</p>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded-2xl space-y-1">
+                <span className="font-bold uppercase text-gray-400 block text-[10px]">Financial Summary</span>
+                <p className="flex justify-between text-gray-500">
+                  <span>Subtotal:</span>
+                  <span>₹{selectedOrder.subtotal}</span>
+                </p>
+                <p className="flex justify-between text-gray-500">
+                  <span>Delivery Fee:</span>
+                  <span>₹{selectedOrder.deliveryCharge}</span>
+                </p>
+                <p className="flex justify-between font-black text-brand-700 text-sm pt-1 border-t">
+                  <span>Total Amount:</span>
+                  <span>₹{selectedOrder.totalAmount}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Print Invoice Action */}
+            <div className="flex justify-between items-center pt-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="bg-gray-100 hover:bg-gray-200 text-charcoal font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-2"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Invoice</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="bg-charcoal text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:bg-black transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

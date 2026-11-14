@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Production Build Outputs
+dist/
+*/dist/
+build/
+*/build/
+
+# Environment Variables (Keep credentials private!)
+.env
+*/.env
+*.env.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local databases and backups
+*.sqlite
+meat_corner_local_db.json
+backend/debug_items.js
+backend/check_counts.js
+backend/sync_to_supabase.js
