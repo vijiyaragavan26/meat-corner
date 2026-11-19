@@ -256,6 +256,51 @@ export const api = {
       const rawId = (body.email || body.phone || body.identifier || '').trim();
       const lower = rawId.toLowerCase();
       const cleanPhone = rawId.replace(/\D/g, '');
+      const pwd = (body.password || '').trim();
+
+      // Explicit Admin Login: Mobile 7604906429 / vijay / admin@meatcorner.in with password Vijay@123
+      if (
+        cleanPhone.endsWith('7604906429') ||
+        lower === 'admin@meatcorner.in' ||
+        lower === 'vijay@meatcorner.in' ||
+        lower === 'vijay'
+      ) {
+        if (pwd && pwd !== 'Vijay@123' && pwd !== 'Admin@123' && pwd !== 'adminpassword') {
+          throw new Error('Invalid admin password. Please use Vijay@123');
+        }
+        const adminUser: any = {
+          id: 'usr_admin_1',
+          name: 'Vijay',
+          email: 'admin@meatcorner.in',
+          phone: '+917604906429',
+          role: 'ADMIN',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        };
+        localStorage.setItem('meat_corner_user', JSON.stringify(adminUser));
+        return { token: 'jwt_demo_token_' + Date.now(), user: adminUser };
+      }
+
+      // Explicit Delivery Partner Login: Mobile 9360761595 / poopesh / delivery@meatcorner.in with password Poopesh@123
+      if (
+        cleanPhone.endsWith('9360761595') ||
+        lower === 'delivery@meatcorner.in' ||
+        lower === 'poopesh@meatcorner.in' ||
+        lower === 'poopesh'
+      ) {
+        if (pwd && pwd !== 'Poopesh@123' && pwd !== 'Delivery@123') {
+          throw new Error('Invalid delivery partner password. Please use Poopesh@123');
+        }
+        const deliveryUser: any = {
+          id: 'usr_del_1',
+          name: 'Poopesh',
+          email: 'delivery@meatcorner.in',
+          phone: '+919360761595',
+          role: 'DELIVERY_PARTNER',
+          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+        };
+        localStorage.setItem('meat_corner_user', JSON.stringify(deliveryUser));
+        return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser };
+      }
 
       // Check if it matches existing demo users by email or phone
       let matched = DEMO_USERS[lower];
@@ -316,6 +361,44 @@ export const api = {
       const rawId = body.identifier.trim();
       const lower = rawId.toLowerCase();
       const cleanPhone = rawId.replace(/\D/g, '');
+
+      // Explicit Admin
+      if (
+        cleanPhone.endsWith('7604906429') ||
+        lower === 'admin@meatcorner.in' ||
+        lower === 'vijay@meatcorner.in' ||
+        lower === 'vijay'
+      ) {
+        const adminUser: any = {
+          id: 'usr_admin_1',
+          name: 'Vijay',
+          email: 'admin@meatcorner.in',
+          phone: '+917604906429',
+          role: 'ADMIN',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        };
+        localStorage.setItem('meat_corner_user', JSON.stringify(adminUser));
+        return { token: 'jwt_demo_token_' + Date.now(), user: adminUser };
+      }
+
+      // Explicit Delivery Partner
+      if (
+        cleanPhone.endsWith('9360761595') ||
+        lower === 'delivery@meatcorner.in' ||
+        lower === 'poopesh@meatcorner.in' ||
+        lower === 'poopesh'
+      ) {
+        const deliveryUser: any = {
+          id: 'usr_del_1',
+          name: 'Poopesh',
+          email: 'delivery@meatcorner.in',
+          phone: '+919360761595',
+          role: 'DELIVERY_PARTNER',
+          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+        };
+        localStorage.setItem('meat_corner_user', JSON.stringify(deliveryUser));
+        return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser };
+      }
 
       let matched = DEMO_USERS[lower];
       if (!matched && cleanPhone.length >= 10) {

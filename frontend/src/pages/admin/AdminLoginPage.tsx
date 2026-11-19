@@ -7,8 +7,8 @@ export const AdminLoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('admin@meatcorner.in');
-  const [password, setPassword] = useState('Admin@123');
+  const [identifier, setIdentifier] = useState('7604906429');
+  const [password, setPassword] = useState('Vijay@123');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export const AdminLoginPage: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const user = await login({ email, password });
+      const user = await login({ identifier, email: identifier, password });
       if (user.role !== 'ADMIN') {
         throw new Error('Access denied. Administrator privileges required.');
       }
@@ -51,15 +51,15 @@ export const AdminLoginPage: React.FC = () => {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
-              Admin Email
+              Admin Mobile Number or Email
             </label>
             <div className="relative">
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@meatcorner.in"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="7604906429 or admin@meatcorner.in"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
@@ -97,12 +97,12 @@ export const AdminLoginPage: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              setEmail('admin@meatcorner.in');
-              setPassword('Admin@123');
+              setIdentifier('7604906429');
+              setPassword('Vijay@123');
             }}
             className="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition"
           >
-            Fill Demo Admin: admin@meatcorner.in / Admin@123
+            Fill Admin: 7604906429 / Vijay@123
           </button>
         </div>
 

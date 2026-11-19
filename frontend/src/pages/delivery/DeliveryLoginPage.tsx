@@ -7,8 +7,8 @@ export const DeliveryLoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('delivery@meatcorner.in');
-  const [password, setPassword] = useState('Delivery@123');
+  const [identifier, setIdentifier] = useState('9360761595');
+  const [password, setPassword] = useState('Poopesh@123');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export const DeliveryLoginPage: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const user = await login({ email, password });
+      const user = await login({ identifier, email: identifier, password });
       if (user.role !== 'DELIVERY_PARTNER' && user.role !== 'ADMIN') {
         throw new Error('Access denied. Valid delivery partner credentials required.');
       }
@@ -51,15 +51,15 @@ export const DeliveryLoginPage: React.FC = () => {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
-              Rider Email / Phone
+              Rider Mobile Number or Email
             </label>
             <div className="relative">
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="delivery@meatcorner.in"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="9360761595 or delivery@meatcorner.in"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-700"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
@@ -97,12 +97,12 @@ export const DeliveryLoginPage: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              setEmail('delivery@meatcorner.in');
-              setPassword('Delivery@123');
+              setIdentifier('9360761595');
+              setPassword('Poopesh@123');
             }}
             className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-bold transition"
           >
-            Fill Demo Rider: delivery@meatcorner.in / Delivery@123
+            Fill Rider: 9360761595 / Poopesh@123
           </button>
         </div>
 

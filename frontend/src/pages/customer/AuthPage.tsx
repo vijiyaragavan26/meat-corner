@@ -176,13 +176,22 @@ export const AuthPage: React.FC = () => {
     setSuccessMsg('Filled demo customer (Priya Dharshini). Click "Sign In with Password"!');
   };
 
-  const fillDemoCustomerEmail = () => {
+  const fillDemoAdmin = () => {
     setIsRegister(false);
     setLoginMode('password');
-    setIdentifier('customer@meatcorner.in');
-    setPassword('Customer@123');
+    setIdentifier('7604906429');
+    setPassword('Vijay@123');
     setErrorMsg(null);
-    setSuccessMsg('Filled demo email (customer@meatcorner.in). Click "Sign In with Password"!');
+    setSuccessMsg('Filled Admin (Vijay: 7604906429 / Vijay@123). Click "Sign In with Password"!');
+  };
+
+  const fillDemoDelivery = () => {
+    setIsRegister(false);
+    setLoginMode('password');
+    setIdentifier('9360761595');
+    setPassword('Poopesh@123');
+    setErrorMsg(null);
+    setSuccessMsg('Filled Delivery (Poopesh: 9360761595 / Poopesh@123). Click "Sign In with Password"!');
   };
 
   const fillDemoOtpFlow = () => {
@@ -580,16 +589,30 @@ export const AuthPage: React.FC = () => {
               <button
                 type="button"
                 onClick={fillDemoCustomerPassword}
-                className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold transition text-left"
+                className="w-full py-2 px-2.5 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold transition text-left"
               >
-                🔑 Demo (Priya - Mobile)
+                🍗 Customer (Priya)
+              </button>
+              <button
+                type="button"
+                onClick={fillDemoAdmin}
+                className="w-full py-2 px-2.5 bg-red-50 hover:bg-red-100/80 text-red-900 border border-red-200 rounded-xl text-[11px] font-bold transition text-left"
+              >
+                👑 Admin (7604906429)
+              </button>
+              <button
+                type="button"
+                onClick={fillDemoDelivery}
+                className="w-full py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-900 border border-emerald-200 rounded-xl text-[11px] font-bold transition text-left"
+              >
+                🛵 Delivery (9360761595)
               </button>
               <button
                 type="button"
                 onClick={fillDemoOtpFlow}
-                className="w-full py-2 px-3 bg-brand-50 hover:bg-brand-100/80 text-brand-900 border border-brand-200 rounded-xl text-[11px] font-bold transition text-left"
+                className="w-full py-2 px-2.5 bg-brand-50 hover:bg-brand-100/80 text-brand-900 border border-brand-200 rounded-xl text-[11px] font-bold transition text-left"
               >
-                📲 Demo OTP Login
+                📲 Demo OTP (123456)
               </button>
             </div>
           </div>
