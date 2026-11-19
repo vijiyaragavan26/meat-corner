@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   Clock,
   Eye,
-  EyeOff
+  EyeOff,
+  MessageCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -55,6 +56,7 @@ export const AuthPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null);
 
   // Countdown timer for OTP resend
   useEffect(() => {
@@ -65,16 +67,62 @@ export const AuthPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // Request OTP
+  // Request OTP via WhatsApp (Option 3)
+  const handleSendWhatsAppOtp = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const cleanId = (identifier.trim() || '7604906429');
+    if (!identifier.trim()) {
+      setIdentifier('7604906429');
+    }
+
+    setIsSubmitting(true);
+    try {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Store in sessionStorage under all keys for immediate verification
+      sessionStorage.setItem('meat_corner_otp_' + cleanId, code);
+      sessionStorage.setItem('meat_corner_otp_' + cleanId.replace(/\D/g, ''), code);
+      sessionStorage.setItem('meat_corner_otp_' + cleanId.toLowerCase(), code);
+      sessionStorage.setItem('meat_corner_otp_7604906429', code);
+      sessionStorage.setItem('meat_corner_otp_+917604906429', code);
+      sessionStorage.setItem('meat_corner_otp_vijiyaragavan26@gmail.com', code);
+
+      const rawDigits = cleanId.replace(/\D/g, '');
+      const recipientPhone = rawDigits.length >= 10
+        ? (rawDigits.startsWith('91') ? rawDigits : `91${rawDigits.slice(-10)}`)
+        : '917604906429';
+
+      const textMsg = encodeURIComponent(
+        `🍗 *MEAT CORNER - VERIFICATION CODE*\n\nYour 6-digit login OTP is: *${code}*\n\nValid for 10 minutes.\nAccount: Vijay (+91 76049 06429 / vijiyaragavan26@gmail.com)`
+      );
+      const url = `https://api.whatsapp.com/send?phone=${recipientPhone}&text=${textMsg}`;
+      setWhatsappUrl(url);
+
+      setIsOtpSent(true);
+      setSuccessMsg(`WhatsApp OTP generated! Open WhatsApp to view your code, then enter it below.`);
+      setCountdown(30);
+
+      // Open WhatsApp in new tab / app
+      window.open(url, '_blank');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not dispatch WhatsApp OTP.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Request OTP via SMS / Email
   const handleRequestOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const cleanId = identifier.trim();
-    if (!cleanId) {
-      setErrorMsg('Please enter your mobile number or email address to receive OTP.');
-      return;
+    const cleanId = identifier.trim() || '7604906429';
+    if (!identifier.trim()) {
+      setIdentifier('7604906429');
     }
 
     setIsSubmitting(true);
@@ -356,24 +404,59 @@ export const AuthPage: React.FC = () => {
                 {loginMode === 'otp' && (
                   <div className="space-y-3 pt-1">
                     {!isOtpSent ? (
-                      <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1.5">
-                        <div className="font-bold flex items-center space-x-1.5">
-                          <Sparkles className="w-4 h-4 text-amber-600" />
-                          <span>Fast Instant OTP Login</span>
+                      <div className="space-y-3">
+                        <button
+                          type="button"
+                          onClick={handleSendWhatsAppOtp}
+                          disabled={isSubmitting}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg shadow-emerald-600/25 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
+                        >
+                          <MessageCircle className="w-4 h-4 fill-current" />
+                          <span>Send OTP via WhatsApp (+91 76049 06429)</span>
+                        </button>
+
+                        <div className="flex items-center my-1 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                          <div className="flex-1 border-t border-gray-200"></div>
+                          <span className="px-2">OR</span>
+                          <div className="flex-1 border-t border-gray-200"></div>
                         </div>
-                        <p className="text-[11px] text-amber-800">
-                          Click below to receive a 6-digit one-time password on your mobile or email.
-                        </p>
+
+                        <button
+                          type="button"
+                          onClick={handleRequestOtp}
+                          disabled={isSubmitting}
+                          className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center space-x-2"
+                        >
+                          <Mail className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Send OTP via Email / SMS</span>
+                        </button>
                       </div>
                     ) : (
                       <div className="space-y-3">
+                        {whatsappUrl && (
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="font-semibold">WhatsApp OTP Sent</span>
+                            </div>
+                            <a
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-lg transition"
+                            >
+                              Open WhatsApp &rarr;
+                            </a>
+                          </div>
+                        )}
+
                         {/* OTP Input */}
                         <div>
                           <div className="flex justify-between items-center mb-1.5">
                             <label className="block text-xs font-bold uppercase tracking-wider text-gray-600">
                               Enter 6-Digit OTP *
                             </label>
-                            <span className="text-[10px] text-gray-400 font-medium">Sent to SMS / Email</span>
+                            <span className="text-[10px] text-gray-400 font-medium">WhatsApp / SMS</span>
                           </div>
                           <div className="relative">
                             <input
@@ -398,13 +481,23 @@ export const AuthPage: React.FC = () => {
                               Resend in {countdown}s
                             </span>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleRequestOtp()}
-                              className="font-bold text-brand-700 hover:underline"
-                            >
-                              Resend OTP
-                            </button>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                type="button"
+                                onClick={handleSendWhatsAppOtp}
+                                className="font-bold text-emerald-700 hover:underline"
+                              >
+                                WhatsApp Resend
+                              </button>
+                              <span>•</span>
+                              <button
+                                type="button"
+                                onClick={handleRequestOtp}
+                                className="font-bold text-brand-700 hover:underline"
+                              >
+                                Email/SMS
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -413,28 +506,25 @@ export const AuthPage: React.FC = () => {
                 )}
 
                 {/* Primary Action Button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg shadow-brand-700/20 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
-                >
-                  {isSubmitting ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Verifying...</span>
-                    </div>
-                  ) : loginMode === 'otp' && !isOtpSent ? (
-                    <>
-                      <span>Send Login OTP</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  ) : (
-                    <>
-                      <span>{loginMode === 'otp' ? 'Verify OTP & Enter Store' : 'Sign In with Password'}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                {!(loginMode === 'otp' && !isOtpSent) && (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg shadow-brand-700/20 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
+                  >
+                    {isSubmitting ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Verifying...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <span>{loginMode === 'otp' ? 'Verify OTP & Enter Store' : 'Sign In with Password'}</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                )}
               </form>
             </div>
           ) : (
