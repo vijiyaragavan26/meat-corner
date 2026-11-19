@@ -91,10 +91,10 @@ export const AdminDeliveryPartnersPage: React.FC = () => {
                     <td className="py-3.5 px-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-xl bg-charcoal text-white flex items-center justify-center font-bold text-xs">
-                          {partner.fullName.charAt(0)}
+                          {(partner.fullName || 'R').charAt(0)}
                         </div>
                         <div>
-                          <span className="font-bold text-charcoal block">{partner.fullName}</span>
+                          <span className="font-bold text-charcoal block">{partner.fullName || 'Delivery Partner'}</span>
                           <span className="text-[10px] text-amber-500 font-bold flex items-center">
                             <Star className="w-3 h-3 fill-amber-400 mr-0.5" />
                             {partner.rating} ★

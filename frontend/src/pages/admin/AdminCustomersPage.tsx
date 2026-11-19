@@ -11,7 +11,15 @@ export const AdminCustomersPage: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.getAdminCustomers();
-      if (res.success) setCustomers(res.data);
+      if (res && res.success && Array.isArray(res.data)) {
+        setCustomers(res.data);
+      } else if (Array.isArray(res?.data)) {
+        setCustomers(res.data);
+      } else if (Array.isArray(res)) {
+        setCustomers(res);
+      }
+    } catch (err) {
+      console.error('Failed to load customers:', err);
     } finally {
       setLoading(false);
     }
@@ -22,22 +30,31 @@ export const AdminCustomersPage: React.FC = () => {
   }, []);
 
   const handleToggleStatus = async (id: string) => {
+    // Instant optimistic UI update
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+    );
     try {
       const res = await api.toggleAdminCustomerStatus(id);
-      if (res.success) {
+      if (res && res.success && res.data) {
         setCustomers((prev) =>
           prev.map((c) => (c.id === id ? { ...c, isActive: res.data.isActive } : c))
         );
       }
     } catch (err: any) {
       alert(err.message || 'Failed to update customer status');
+      fetchCustomers();
     }
   };
 
   const filtered = customers.filter((c) => {
+    if (!c) return false;
     if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || c.phone.includes(q);
+    const q = searchQuery.toLowerCase().trim();
+    const name = (c.name || '').toLowerCase();
+    const email = (c.email || '').toLowerCase();
+    const phone = (c.phone || '').toLowerCase();
+    return name.includes(q) || email.includes(q) || phone.includes(q);
   });
 
   return (
@@ -79,36 +96,42 @@ export const AdminCustomersPage: React.FC = () => {
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-gray-400">Loading customer database...</td>
                 </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-gray-400">No customers found matching search.</td>
+                </tr>
               ) : (
                 filtered.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50/80 transition">
                     <td className="py-3.5 px-4">
-                      <span className="font-bold text-charcoal block">{c.name}</span>
-                      <span className="text-gray-400 text-[10px]">{c.email}</span>
+                      <span className="font-bold text-charcoal block">{c.name || 'Valued Customer'}</span>
+                      <span className="text-gray-400 text-[10px]">{c.email || 'customer@meatcorner.in'}</span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-semibold text-gray-600">{c.phone}</td>
-                    <td className="py-3.5 px-4 text-gray-400">{c.createdAt.slice(0, 10)}</td>
-                    <td className="py-3.5 px-4 font-black text-charcoal">{c.totalOrders} orders</td>
-                    <td className="py-3.5 px-4 font-black text-brand-700 text-sm">₹{c.totalSpent}</td>
+                    <td className="py-3.5 px-4 font-mono font-semibold text-gray-600">{c.phone || '—'}</td>
+                    <td className="py-3.5 px-4 text-gray-400">
+                      {c.createdAt ? String(c.createdAt).slice(0, 10) : '2026-11-10'}
+                    </td>
+                    <td className="py-3.5 px-4 font-black text-charcoal">{c.totalOrders ?? 1} orders</td>
+                    <td className="py-3.5 px-4 font-black text-brand-700 text-sm">₹{c.totalSpent ?? 0}</td>
                     <td className="py-3.5 px-4">
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          c.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}
                       >
-                        {c.isActive ? 'Active' : 'Blocked'}
+                        {c.isActive !== false ? 'Active' : 'Blocked'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <button
                         onClick={() => handleToggleStatus(c.id)}
                         className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition ${
-                          c.isActive
+                          c.isActive !== false
                             ? 'text-red-600 border-red-200 hover:bg-red-50'
                             : 'text-green-600 border-green-200 hover:bg-green-50'
                         }`}
                       >
-                        {c.isActive ? 'Block' : 'Unblock'}
+                        {c.isActive !== false ? 'Block' : 'Unblock'}
                       </button>
                     </td>
                   </tr>

@@ -102,6 +102,48 @@ function saveLiveOrders(orders: any[]) {
     localStorage.setItem('meat_corner_live_orders', JSON.stringify(orders));
   } catch {}
 }
+
+const DEFAULT_CUSTOMERS = [
+  {
+    id: 'usr_cust_1',
+    name: 'Priya Dharshini',
+    email: 'customer@meatcorner.in',
+    phone: '+919876543210',
+    totalOrders: 14,
+    totalSpent: 4850,
+    isActive: true,
+    createdAt: '2026-11-01T08:30:00.000Z',
+  },
+  {
+    id: 'usr_cust_2',
+    name: 'Vijay Kumar',
+    email: 'vijay@meatcorner.in',
+    phone: '+917604906429',
+    totalOrders: 8,
+    totalSpent: 2950,
+    isActive: true,
+    createdAt: '2026-11-05T11:15:00.000Z',
+  },
+];
+
+function getStoredCustomers(): any[] {
+  try {
+    const saved = localStorage.getItem('meat_corner_admin_customers');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return [...DEFAULT_CUSTOMERS];
+}
+
+function saveStoredCustomers(customers: any[]) {
+  try {
+    localStorage.setItem('meat_corner_admin_customers', JSON.stringify(customers));
+  } catch {}
+}
 function getStoredCart(): any {
   try {
     const saved = localStorage.getItem('meat_corner_live_cart');
@@ -716,32 +758,54 @@ export const api = {
     ),
 
   getAdminCustomers: () =>
-    callApi('/admin/customers', {}, () => [
-      {
-        id: 'usr_cust_1',
-        name: 'Priya Dharshini',
-        email: 'customer@meatcorner.in',
-        phone: '+919876543210',
-        totalOrders: 14,
-        totalSpent: 4850,
-        isActive: true,
-      },
-      {
-        id: 'usr_cust_2',
-        name: 'Vijay Kumar',
-        email: 'vijay@meatcorner.in',
-        phone: '+917604906429',
-        totalOrders: 8,
-        totalSpent: 2950,
-        isActive: true,
-      },
-    ]),
+    callApi('/admin/customers', {}, () => {
+      const stored = getStoredCustomers();
+      const orders = getLiveOrders();
+      const customerMap = new Map<string, any>();
+      stored.forEach((c) => customerMap.set(c.phone || c.id, { ...c }));
+
+      orders.forEach((ord: any) => {
+        const phone = ord.deliveryAddress?.phone || ord.userPhone || '+919876543210';
+        const name = ord.deliveryAddress?.fullName || ord.userName || 'Priya Dharshini';
+        const total = Number(ord.totalAmount) || 0;
+        if (customerMap.has(phone)) {
+          const existing = customerMap.get(phone);
+          // ensure customer has createdAt
+          if (!existing.createdAt) existing.createdAt = ord.createdAt || '2026-11-10T09:00:00.000Z';
+        } else {
+          customerMap.set(phone, {
+            id: `usr_live_${phone.replace(/\D/g, '').slice(-4) || '9999'}`,
+            name,
+            email: ord.userEmail || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@meatcorner.in`,
+            phone,
+            totalOrders: 1,
+            totalSpent: total,
+            isActive: true,
+            createdAt: ord.createdAt || new Date().toISOString(),
+          });
+        }
+      });
+      const list = Array.from(customerMap.values());
+      return list;
+    }),
 
   toggleAdminCustomerStatus: (id: string) =>
-    callApi('/admin/customers/' + id + '/toggle-status', { method: 'PATCH' }, () => ({
-      id,
-      isActive: false,
-    })),
+    callApi('/admin/customers/' + id + '/toggle-status', { method: 'PATCH' }, () => {
+      const stored = getStoredCustomers();
+      let updatedIsActive = false;
+      const updated = stored.map((c) => {
+        if (c.id === id) {
+          updatedIsActive = !c.isActive;
+          return { ...c, isActive: updatedIsActive };
+        }
+        return c;
+      });
+      saveStoredCustomers(updated);
+      return {
+        id,
+        isActive: updatedIsActive,
+      };
+    }),
 
   getAdminCoupons: () =>
     callApi('/admin/coupons', {}, () => [
