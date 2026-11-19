@@ -13,12 +13,14 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-charcoal-600">
           {/* Brand Info */}
           <div className="lg:col-span-2 space-y-4">
-            <Link to="/" className="flex items-center space-x-2.5">
-              <div className="w-10 h-10 rounded-xl bg-brand-700 flex items-center justify-center text-white text-xl">
-                🍗
-              </div>
+            <Link to="/" className="flex items-center space-x-3 group">
+              <img
+                src="/logo.png"
+                alt="MPM Meat Corner"
+                className="w-12 h-12 rounded-full object-cover border-2 border-emerald-400/40 shadow group-hover:scale-105 transition-transform"
+              />
               <div className="flex items-center">
-                <span className="text-2xl font-black tracking-tight text-white">MEAT</span>
+                <span className="text-2xl font-black tracking-tight text-white">MPM MEAT</span>
                 <span className="text-2xl font-black tracking-tight text-brand-500 ml-1">CORNER</span>
               </div>
             </Link>

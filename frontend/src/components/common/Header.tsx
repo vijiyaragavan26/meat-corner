@@ -70,16 +70,18 @@ export const Header: React.FC = () => {
           {/* Logo & Brand Identity */}
           <div className="flex items-center space-x-6">
             <Link to="/" className="flex items-center space-x-2.5 group">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center text-white shadow-md shadow-brand-700/30 group-hover:scale-105 transition-transform">
-                <span className="text-2xl">🍗</span>
-              </div>
+              <img
+                src="/logo.png"
+                alt="MPM Meat Corner Logo"
+                className="w-12 h-12 rounded-full object-cover shadow-md group-hover:scale-105 transition-transform border-2 border-emerald-500/20"
+              />
               <div className="flex flex-col">
                 <div className="flex items-center">
-                  <span className="text-2xl font-black tracking-tight text-charcoal">MEAT</span>
+                  <span className="text-2xl font-black tracking-tight text-charcoal">MPM MEAT</span>
                   <span className="text-2xl font-black tracking-tight text-brand-700 ml-1">CORNER</span>
                 </div>
                 <span className="text-[10px] tracking-widest uppercase font-semibold text-gray-500">
-                  100% Fresh Chicken
+                  Fresh • Hygienic • Healthy
                 </span>
               </div>
             </Link>

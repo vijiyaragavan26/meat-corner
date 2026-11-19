@@ -67,10 +67,10 @@ export const DeliveryLoginPage: React.FC = () => {
     <div className="min-h-screen bg-emerald-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-emerald-100 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-700 text-white flex items-center justify-center text-2xl mx-auto shadow-lg shadow-emerald-700/40">
-            <Bike className="w-7 h-7" />
+          <div className="w-16 h-16 rounded-full mx-auto shadow-xl border-2 border-emerald-500/30 overflow-hidden">
+            <img src="/logo.png" alt="MPM Meat Corner Logo" className="w-full h-full object-cover" />
           </div>
-          <h2 className="text-2xl font-black text-charcoal tracking-tight">Meat Corner Fleet</h2>
+          <h2 className="text-2xl font-black text-charcoal tracking-tight">MPM Meat Corner Fleet</h2>
           <p className="text-xs text-gray-500">Authorized Delivery Driver Application Portal</p>
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-[10px] font-bold">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />

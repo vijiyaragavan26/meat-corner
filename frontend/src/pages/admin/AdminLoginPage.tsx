@@ -69,10 +69,10 @@ export const AdminLoginPage: React.FC = () => {
     <div className="min-h-screen bg-charcoal-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-gray-100 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-brand-700 text-white flex items-center justify-center text-2xl mx-auto shadow-lg shadow-brand-700/40">
-            <Shield className="w-7 h-7" />
+          <div className="w-16 h-16 rounded-full mx-auto shadow-xl border-2 border-emerald-500/30 overflow-hidden">
+            <img src="/logo.png" alt="MPM Meat Corner Logo" className="w-full h-full object-cover" />
           </div>
-          <h2 className="text-2xl font-black text-charcoal tracking-tight">MEAT CORNER Admin</h2>
+          <h2 className="text-2xl font-black text-charcoal tracking-tight">MPM MEAT CORNER Admin</h2>
           <p className="text-xs text-gray-500">Restricted Operations, Butchery & Order Fulfillment</p>
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-full text-[10px] font-bold">
             <ShieldCheck className="w-3.5 h-3.5 text-brand-700" />

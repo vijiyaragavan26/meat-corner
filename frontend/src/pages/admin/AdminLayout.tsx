@@ -79,11 +79,13 @@ export const AdminLayout: React.FC = () => {
           {/* Logo */}
           <div className="flex items-center justify-between">
             <Link to="/admin/dashboard" className="flex items-center space-x-2.5">
-              <div className="w-10 h-10 rounded-xl bg-brand-700 flex items-center justify-center text-white text-xl shadow">
-                🍗
-              </div>
+              <img
+                src="/logo.png"
+                alt="MPM Meat Corner Logo"
+                className="w-10 h-10 rounded-full object-cover border border-emerald-400/40 shadow"
+              />
               <div>
-                <span className="font-black text-lg tracking-tight">MEAT CORNER</span>
+                <span className="font-black text-lg tracking-tight">MPM MEAT</span>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-brand-400 block -mt-1">
                   Admin Control
                 </span>

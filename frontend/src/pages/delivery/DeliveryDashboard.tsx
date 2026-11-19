@@ -188,9 +188,11 @@ export const DeliveryDashboard: React.FC = () => {
       <div className="bg-emerald-900 text-white p-4 sticky top-0 z-40 shadow-md">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-700 flex items-center justify-center text-xl font-bold border border-white/20">
-              🏍️
-            </div>
+            <img
+              src="/logo.png"
+              alt="MPM Meat Corner Logo"
+              className="w-10 h-10 rounded-full object-cover border border-white/40 shadow shrink-0"
+            />
             <div>
               <h1 className="font-black text-sm">{partner?.fullName || user?.name}</h1>
               <span className="text-[10px] text-emerald-200 block -mt-0.5">

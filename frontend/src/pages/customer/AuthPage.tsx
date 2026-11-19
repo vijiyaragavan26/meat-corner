@@ -222,16 +222,18 @@ export const AuthPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-amber-50/40 via-white to-gray-50 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
       {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-3">
-        <Link to="/" className="inline-flex items-center justify-center space-x-2.5 group">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 text-white flex items-center justify-center text-2xl shadow-lg shadow-brand-700/30 group-hover:scale-105 transition-transform">
-            🍗
-          </div>
+        <Link to="/" className="inline-flex items-center justify-center space-x-3 group">
+          <img
+            src="/logo.png"
+            alt="MPM Meat Corner Logo"
+            className="w-16 h-16 rounded-full object-cover shadow-xl group-hover:scale-105 transition-transform border-2 border-emerald-500/30"
+          />
           <div className="text-left">
             <span className="text-2xl font-black text-charcoal tracking-tight block leading-tight">
-              MEAT <span className="text-brand-700">CORNER</span>
+              MPM MEAT <span className="text-brand-700">CORNER</span>
             </span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block -mt-1">
-              Fresh Chicken Delivery
+            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 block -mt-0.5">
+              Fresh • Hygienic • Healthy
             </span>
           </div>
         </Link>
