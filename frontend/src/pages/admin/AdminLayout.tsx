@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -37,24 +37,12 @@ export const AdminLayout: React.FC = () => {
     );
   }
 
-  if (!user || user.role !== 'ADMIN') {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-        <div className="bg-white rounded-3xl p-8 border border-gray-200 text-center space-y-4 max-w-md shadow-xl">
-          <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center mx-auto text-xl">
-            🔒
-          </div>
-          <h2 className="text-xl font-black text-charcoal">Admin Access Required</h2>
-          <p className="text-xs text-gray-500">Please sign in with administrator credentials to manage the platform.</p>
-          <Link
-            to="/admin/login"
-            className="bg-brand-700 text-white font-bold text-xs uppercase px-6 py-3 rounded-xl inline-block shadow"
-          >
-            Go to Admin Login
-          </Link>
-        </div>
-      </div>
-    );
+  if (!user) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  if (user.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
   }
 
   const navItems = [

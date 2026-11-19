@@ -63,6 +63,10 @@ export const DeliveryDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    if (user && user.role === 'CUSTOMER') {
+      navigate('/', { replace: true });
+      return;
+    }
     fetchData();
     // Simulate real-time GPS coordinate transmission every 10s if online
     const gpsInterval = setInterval(() => {

@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Bike, Lock, Mail, ArrowRight, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const DeliveryLoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+
+  useEffect(() => {
+    if (user && user.role === 'CUSTOMER') {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const [identifier, setIdentifier] = useState('9360761595');
   const [password, setPassword] = useState('Poopesh@123');

@@ -52,14 +52,6 @@ export const Header: React.FC = () => {
             <span className="text-brand-100">⚡ {t('express_delivery')}</span>
           </div>
           <div className="flex items-center space-x-5">
-            <Link to="/delivery" className="flex items-center hover:text-brand-200 transition-colors">
-              <Bike className="w-3.5 h-3.5 mr-1" />
-              <span>{t('delivery_portal')}</span>
-            </Link>
-            <Link to="/admin" className="flex items-center hover:text-brand-200 transition-colors">
-              <Shield className="w-3.5 h-3.5 mr-1" />
-              <span>{t('admin_portal')}</span>
-            </Link>
             {/* Language Switcher */}
             <button
               onClick={() => setLanguage(language === 'en' ? 'ta' : 'en')}
@@ -291,22 +283,6 @@ export const Header: React.FC = () => {
               className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
             >
               {t('my_orders')}
-            </Link>
-            <Link
-              to="/delivery"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg flex items-center"
-            >
-              <Bike className="w-4 h-4 mr-2" />
-              {t('delivery_portal')}
-            </Link>
-            <Link
-              to="/admin"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 rounded-lg flex items-center"
-            >
-              <Shield className="w-4 h-4 mr-2" />
-              {t('admin_portal')}
             </Link>
           </div>
         </div>

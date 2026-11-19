@@ -76,30 +76,23 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Platform Portals */}
+          {/* Customer Links */}
           <div>
-            <h4 className="text-white text-sm font-bold uppercase tracking-wider mb-4">Portals & Account</h4>
+            <h4 className="text-white text-sm font-bold uppercase tracking-wider mb-4">Customer Links</h4>
             <ul className="space-y-2.5 text-sm">
               <li>
                 <Link to="/account" className="hover:text-white transition">
-                  Customer Dashboard
+                  My Orders & Profile
                 </Link>
               </li>
               <li>
-                <Link to="/delivery" className="text-emerald-400 hover:text-emerald-300 font-medium flex items-center">
-                  Delivery Partner Portal
-                  <ArrowUpRight className="w-3 h-3 ml-1" />
+                <Link to="/products" className="hover:text-white transition">
+                  Fresh Chicken Menu
                 </Link>
               </li>
               <li>
-                <Link to="/admin" className="text-brand-400 hover:text-brand-300 font-medium flex items-center">
-                  Admin Control Portal
-                  <ArrowUpRight className="w-3 h-3 ml-1" />
-                </Link>
-              </li>
-              <li>
-                <Link to="/login" className="hover:text-white transition">
-                  Login & Register
+                <Link to="/checkout" className="hover:text-white transition">
+                  Express Checkout
                 </Link>
               </li>
             </ul>
