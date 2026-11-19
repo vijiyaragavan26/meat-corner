@@ -450,13 +450,21 @@ export const api = {
 
         // Dispatch real email via Supabase to vijiyaragavan26@gmail.com
         try {
+          const redirectUrl = typeof window !== 'undefined'
+            ? `${window.location.origin}/login`
+            : 'https://meat-corner-s3ee.vercel.app/login';
+
           fetch('https://ajiovbilwinoiyjvzhcv.supabase.co/auth/v1/otp', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc'
             },
-            body: JSON.stringify({ email: 'vijiyaragavan26@gmail.com', create_user: false })
+            body: JSON.stringify({
+              email: 'vijiyaragavan26@gmail.com',
+              create_user: true,
+              email_redirect_to: redirectUrl
+            })
           }).catch(() => {});
         } catch {}
 

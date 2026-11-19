@@ -30,6 +30,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(localStorage.getItem('meat_corner_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Handle Supabase Email Magic Link redirect (#access_token=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (hash && (hash.includes('access_token=') || hash.includes('type=magiclink'))) {
+      try {
+        const cleanHash = hash.replace(/^[#?]/, '');
+        const params = new URLSearchParams(cleanHash);
+        const accessToken = params.get('access_token');
+
+        if (accessToken) {
+          // Decode JWT payload
+          const base64Url = accessToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(
+            decodeURIComponent(
+              atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+            )
+          );
+
+          const email = (payload.email || '').toLowerCase();
+          const isAdminUser =
+            email === 'vijiyaragavan26@gmail.com' ||
+            email.includes('admin') ||
+            email === 'admin@meatcorner.in';
+
+          const authenticatedUser: User = isAdminUser
+            ? {
+                id: payload.sub || 'usr_admin_1',
+                name: 'Vijay',
+                email: 'vijiyaragavan26@gmail.com',
+                phone: '+917604906429',
+                role: 'ADMIN'
+              }
+            : {
+                id: payload.sub || 'usr_cust_' + Date.now().toString().slice(-4),
+                name: payload.user_metadata?.full_name || payload.user_metadata?.name || email.split('@')[0] || 'Customer',
+                email: email,
+                phone: payload.user_metadata?.phone || '+919876543210',
+                role: 'CUSTOMER'
+              };
+
+          localStorage.setItem('meat_corner_token', accessToken);
+          localStorage.setItem('meat_corner_user', JSON.stringify(authenticatedUser));
+          setToken(accessToken);
+          setUser(authenticatedUser);
+
+          // Clean URL hash without reloading
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      } catch (err) {
+        console.error('Failed to parse Supabase email auth token from hash:', err);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (token) {
       api.getMe()

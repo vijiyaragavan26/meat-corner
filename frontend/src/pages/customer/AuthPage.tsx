@@ -369,6 +369,17 @@ export const AuthPage: React.FC = () => {
                       </button>
                     ) : (
                       <div className="space-y-3">
+                        {/* Email Sent Notice with 1-Tap Sign-In Guidance */}
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-950 space-y-1.5">
+                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
+                            <Mail className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>Verification Email Sent!</span>
+                          </div>
+                          <p className="text-[11px] text-emerald-800/90 leading-relaxed">
+                            Check your inbox: Tap <strong>"Sign in"</strong> directly in the email to log in instantly with 1-click, or enter your 6-digit verification code below.
+                          </p>
+                        </div>
+
                         {/* OTP Input */}
                         <div>
                           <div className="flex justify-between items-center mb-1.5">
