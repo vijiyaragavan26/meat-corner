@@ -7,16 +7,12 @@ import {
   User,
   ArrowRight,
   ShieldCheck,
-  Bike,
-  Shield,
   KeyRound,
   Sparkles,
   CheckCircle2,
   Clock,
   Eye,
-  EyeOff,
-  Flame,
-  Truck
+  EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -164,45 +160,6 @@ export const AuthPage: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  // Quick Demo Fills
-  const fillDemoCustomerPassword = () => {
-    setIsRegister(false);
-    setLoginMode('password');
-    setIdentifier('+91 98765 43210');
-    setPassword('Customer@123');
-    setErrorMsg(null);
-    setSuccessMsg('Filled demo customer (Priya Dharshini). Click "Sign In with Password"!');
-  };
-
-  const fillDemoAdmin = () => {
-    setIsRegister(false);
-    setLoginMode('password');
-    setIdentifier('7604906429');
-    setPassword('Vijay@123');
-    setErrorMsg(null);
-    setSuccessMsg('Filled Admin (Vijay: 7604906429 / Vijay@123). Click "Sign In with Password"!');
-  };
-
-  const fillDemoDelivery = () => {
-    setIsRegister(false);
-    setLoginMode('password');
-    setIdentifier('9360761595');
-    setPassword('Poopesh@123');
-    setErrorMsg(null);
-    setSuccessMsg('Filled Delivery (Poopesh: 9360761595 / Poopesh@123). Click "Sign In with Password"!');
-  };
-
-  const fillDemoOtpFlow = () => {
-    setIsRegister(false);
-    setLoginMode('otp');
-    setIdentifier('+91 98765 43210');
-    setIsOtpSent(true);
-    setGeneratedOtp('123456');
-    setOtp('123456');
-    setErrorMsg(null);
-    setSuccessMsg('Demo OTP filled (123456). Click "Verify OTP & Enter Store"!');
   };
 
   return (
@@ -579,68 +536,6 @@ export const AuthPage: React.FC = () => {
               </button>
             </form>
           )}
-
-          {/* Quick Demo Test Logins */}
-          <div className="pt-4 border-t border-gray-100 space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block text-center">
-              Quick 1-Click Demo Logins
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={fillDemoCustomerPassword}
-                className="w-full py-2 px-2.5 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold transition text-left"
-              >
-                🍗 Customer (Priya)
-              </button>
-              <button
-                type="button"
-                onClick={fillDemoAdmin}
-                className="w-full py-2 px-2.5 bg-red-50 hover:bg-red-100/80 text-red-900 border border-red-200 rounded-xl text-[11px] font-bold transition text-left"
-              >
-                👑 Admin (7604906429)
-              </button>
-              <button
-                type="button"
-                onClick={fillDemoDelivery}
-                className="w-full py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-900 border border-emerald-200 rounded-xl text-[11px] font-bold transition text-left"
-              >
-                🛵 Delivery (9360761595)
-              </button>
-              <button
-                type="button"
-                onClick={fillDemoOtpFlow}
-                className="w-full py-2 px-2.5 bg-brand-50 hover:bg-brand-100/80 text-brand-900 border border-brand-200 rounded-xl text-[11px] font-bold transition text-left"
-              >
-                📲 Demo OTP (123456)
-              </button>
-            </div>
-          </div>
-
-          {/* Value Props & Guarantees */}
-          <div className="pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-[11px] text-gray-500 font-semibold">
-            <div className="flex items-center space-x-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-brand-700 shrink-0" />
-              <span>100% Halal Cuts</span>
-            </div>
-            <div className="flex items-center space-x-1.5">
-              <Truck className="w-3.5 h-3.5 text-brand-700 shrink-0" />
-              <span>30-45 Mins Express</span>
-            </div>
-          </div>
-
-          {/* Alternate Portals */}
-          <div className="pt-3 border-t border-gray-100 flex justify-around text-xs text-gray-500">
-            <Link to="/delivery/login" className="flex items-center text-emerald-700 font-bold hover:underline">
-              <Bike className="w-3.5 h-3.5 mr-1" />
-              <span>Delivery Partner</span>
-            </Link>
-            <span className="text-gray-300">|</span>
-            <Link to="/admin/login" className="flex items-center text-brand-700 font-bold hover:underline">
-              <Shield className="w-3.5 h-3.5 mr-1" />
-              <span>Admin Login</span>
-            </Link>
-          </div>
         </div>
       </div>
     </div>
