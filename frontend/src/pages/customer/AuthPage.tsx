@@ -73,30 +73,38 @@ export const AuthPage: React.FC = () => {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const cleanId = (identifier.trim() || '7604906429');
-    if (!identifier.trim()) {
-      setIdentifier('7604906429');
+    const cleanId = identifier.trim();
+    if (!cleanId) {
+      setErrorMsg('Please enter your mobile number or email address above.');
+      return;
     }
 
     setIsSubmitting(true);
     try {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const rawDigits = cleanId.replace(/\D/g, '');
+      const lower = cleanId.toLowerCase();
 
       // Store in sessionStorage under all keys for immediate verification
       sessionStorage.setItem('meat_corner_otp_' + cleanId, code);
-      sessionStorage.setItem('meat_corner_otp_' + cleanId.replace(/\D/g, ''), code);
-      sessionStorage.setItem('meat_corner_otp_' + cleanId.toLowerCase(), code);
-      sessionStorage.setItem('meat_corner_otp_7604906429', code);
-      sessionStorage.setItem('meat_corner_otp_+917604906429', code);
-      sessionStorage.setItem('meat_corner_otp_vijiyaragavan26@gmail.com', code);
+      if (rawDigits) {
+        sessionStorage.setItem('meat_corner_otp_' + rawDigits, code);
+        sessionStorage.setItem('meat_corner_otp_' + rawDigits.slice(-10), code);
+      }
+      sessionStorage.setItem('meat_corner_otp_' + lower, code);
 
-      const rawDigits = cleanId.replace(/\D/g, '');
+      if (rawDigits.endsWith('7604906429') || lower === 'vijiyaragavan26@gmail.com') {
+        sessionStorage.setItem('meat_corner_otp_7604906429', code);
+        sessionStorage.setItem('meat_corner_otp_+917604906429', code);
+        sessionStorage.setItem('meat_corner_otp_vijiyaragavan26@gmail.com', code);
+      }
+
       const recipientPhone = rawDigits.length >= 10
         ? (rawDigits.startsWith('91') ? rawDigits : `91${rawDigits.slice(-10)}`)
         : '917604906429';
 
       const textMsg = encodeURIComponent(
-        `🍗 *MEAT CORNER - VERIFICATION CODE*\n\nYour 6-digit login OTP is: *${code}*\n\nValid for 10 minutes.\nAccount: Vijay (+91 76049 06429 / vijiyaragavan26@gmail.com)`
+        `🍗 *MEAT CORNER - VERIFICATION CODE*\n\nYour 6-digit login OTP is: *${code}*\n\nValid for 10 minutes.\nDo not share this code with anyone.`
       );
       const url = `https://api.whatsapp.com/send?phone=${recipientPhone}&text=${textMsg}`;
       setWhatsappUrl(url);
@@ -120,9 +128,10 @@ export const AuthPage: React.FC = () => {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const cleanId = identifier.trim() || '7604906429';
-    if (!identifier.trim()) {
-      setIdentifier('7604906429');
+    const cleanId = identifier.trim();
+    if (!cleanId) {
+      setErrorMsg('Please enter your mobile number or email address to receive OTP.');
+      return;
     }
 
     setIsSubmitting(true);
@@ -412,7 +421,7 @@ export const AuthPage: React.FC = () => {
                           className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg shadow-emerald-600/25 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
                         >
                           <MessageCircle className="w-4 h-4 fill-current" />
-                          <span>Send OTP via WhatsApp (+91 76049 06429)</span>
+                          <span>Send OTP via WhatsApp</span>
                         </button>
 
                         <div className="flex items-center my-1 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
