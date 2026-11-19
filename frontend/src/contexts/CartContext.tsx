@@ -75,6 +75,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateQuantity = async (itemId: string, quantity: number) => {
     try {
+      if (quantity <= 0) {
+        await removeItem(itemId);
+        return;
+      }
       const res = await api.updateCartItem(itemId, { quantity });
       if (res.success) setCart(res.data);
     } catch (err: any) {

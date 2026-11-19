@@ -144,7 +144,7 @@ export const CartDrawer: React.FC = () => {
 
                     <div className="flex flex-wrap gap-1 mt-1">
                       <span className="text-[10px] font-semibold bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">
-                        {item.variant?.label || '500g'}
+                        {item.variant?.label || (item.variant?.weightGrams ? `${item.variant.weightGrams}g` : '500g')}
                       </span>
                       {item.cuttingOption && (
                         <span className="text-[10px] font-semibold bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
@@ -155,21 +155,35 @@ export const CartDrawer: React.FC = () => {
 
                     <div className="flex justify-between items-center mt-3">
                       <span className="font-extrabold text-brand-700 text-sm">
-                        ₹{((item.variant?.price ?? item.product?.basePrice) || 250) * item.quantity}
+                        ₹{(
+                          (item.variant?.price && item.variant.price > 0
+                            ? item.variant.price
+                            : item.product?.basePrice && item.product.basePrice > 0
+                              ? item.product.basePrice
+                              : 250) * Math.max(1, item.quantity || 1)
+                        )}
                       </span>
 
                       {/* Quantity Stepper */}
                       <div className="flex items-center space-x-2 bg-white rounded-lg border border-gray-200 p-1">
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700"
+                          onClick={() => {
+                            if ((item.quantity || 1) <= 1) {
+                              removeItem(item.id);
+                            } else {
+                              updateQuantity(item.id, (item.quantity || 1) - 1);
+                            }
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700 active:scale-95 transition"
+                          title="Reduce quantity"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
+                        <span className="text-xs font-bold w-4 text-center">{Math.max(1, item.quantity || 1)}</span>
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700"
+                          onClick={() => updateQuantity(item.id, (item.quantity || 1) + 1)}
+                          className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700 active:scale-95 transition"
+                          title="Increase quantity"
                         >
                           <Plus className="w-3 h-3" />
                         </button>

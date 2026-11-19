@@ -141,13 +141,16 @@ function saveLiveCart() {
 }
 
 function updateLiveCartPricing() {
-  // Ensure each cart item has complete product and variant details
+  // Filter out any zero or negative quantity items
+  liveCart.items = (liveCart.items || []).filter((it: any) => (it.quantity || 0) > 0);
+
+  // Ensure each cart item has complete product and valid variant details
   liveCart.items.forEach((it: any) => {
     if (!it.product) {
       it.product = DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
     }
-    if (!it.variant) {
-      const prod = it.product || DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
+    const prod = it.product || DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
+    if (!it.variant || !it.variant.price || it.variant.price <= 0) {
       it.variant =
         prod.variants?.find((v: any) => v.id === it.variantId) ||
         prod.variants?.[0] || {
@@ -162,7 +165,11 @@ function updateLiveCartPricing() {
   });
 
   const subtotal = liveCart.items.reduce((sum: number, it: any) => {
-    const price = it.variant?.price ?? it.product?.basePrice ?? 250;
+    const price = (it.variant?.price && it.variant.price > 0)
+      ? it.variant.price
+      : (it.product?.basePrice && it.product.basePrice > 0)
+        ? it.product.basePrice
+        : 250;
     return sum + price * (it.quantity || 1);
   }, 0);
   const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
@@ -295,7 +302,11 @@ export const api = {
     callApi('/cart/items/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => {
       const it = liveCart.items.find((i: any) => i.id === id);
       if (it && body.quantity !== undefined) {
-        it.quantity = body.quantity;
+        if (body.quantity <= 0) {
+          liveCart.items = liveCart.items.filter((i: any) => i.id !== id);
+        } else {
+          it.quantity = body.quantity;
+        }
       }
       return updateLiveCartPricing();
     }),

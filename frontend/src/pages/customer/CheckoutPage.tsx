@@ -455,12 +455,18 @@ export const CheckoutPage: React.FC = () => {
                   <div>
                     <h5 className="font-bold text-charcoal">{it.product?.name}</h5>
                     <p className="text-[11px] text-gray-500">
-                      {it.variant?.label || '500g'} • {it.cuttingOption}
+                      {it.variant?.label || (it.variant?.weightGrams ? `${it.variant.weightGrams}g` : '500g')} • {it.cuttingOption}
                     </p>
-                    <span className="text-gray-400">Qty: {it.quantity}</span>
+                    <span className="text-gray-400">Qty: {Math.max(1, it.quantity || 1)}</span>
                   </div>
                   <span className="font-extrabold text-charcoal">
-                    ₹{((it.variant?.price ?? it.product?.basePrice) || 250) * it.quantity}
+                    ₹{(
+                      (it.variant?.price && it.variant.price > 0
+                        ? it.variant.price
+                        : it.product?.basePrice && it.product.basePrice > 0
+                          ? it.product.basePrice
+                          : 250) * Math.max(1, it.quantity || 1)
+                    )}
                   </span>
                 </div>
               ))}
