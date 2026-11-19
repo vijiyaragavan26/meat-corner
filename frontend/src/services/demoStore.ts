@@ -350,8 +350,8 @@ export const DEMO_ORDERS: any[] = [
     deliveryAddressSnapshot: {
       recipientName: 'Vijay Kumar',
       phone: '+917604906429',
-      line1: 'No 15, Bharathi Street',
-      area: 'Kanjikovil',
+      line1: '115/1 Main Street, Anna Nagar',
+      area: 'Pallapalayam, Perundurai',
       city: 'Erode',
       pincode: '638116',
       lat: 11.3830,

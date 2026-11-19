@@ -157,6 +157,9 @@ export const RefundPolicyPage: React.FC = () => {
                 <Mail className="w-4 h-4" />
                 <span>support@meatcorner.in</span>
               </a>
+              <span className="inline-flex items-center space-x-1.5 text-gray-600">
+                <span>📍 115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116</span>
+              </span>
             </div>
           </section>
         </div>

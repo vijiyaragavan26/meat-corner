@@ -119,7 +119,7 @@ export const Footer: React.FC = () => {
             <ul className="space-y-3 text-xs text-gray-400">
               <li className="flex items-start">
                 <MapPin className="w-4 h-4 text-brand-500 mr-2 flex-shrink-0 mt-0.5" />
-                <span>142 Main Road, Near Bus Stand, Kanjikovil, Erode, Tamil Nadu 638116</span>
+                <span>115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116</span>
               </li>
               <li className="flex items-center">
                 <Phone className="w-4 h-4 text-brand-500 mr-2 flex-shrink-0" />

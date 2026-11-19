@@ -361,7 +361,7 @@ export const api = {
           message: 'FLEET ALERT: Driver App login authorized for Poopesh (+91 93607 61595 / delivery@meatcorner.in). Shift active.',
           status: 'SENT & DELIVERED',
           device: 'Rider Mobile Web Portal',
-          location: 'Kanjikovil / Erode'
+          location: 'Pallapalayam, Perundurai / Erode'
         };
         try {
           const prev = JSON.parse(localStorage.getItem('meat_corner_delivery_alerts') || '[]');
@@ -574,7 +574,7 @@ export const api = {
           message: 'FLEET ALERT: Driver App OTP login authorized for Poopesh (+91 93607 61595 / delivery@meatcorner.in).',
           status: 'SENT & DELIVERED',
           device: 'Rider Mobile Web Portal',
-          location: 'Kanjikovil / Erode'
+          location: 'Pallapalayam, Perundurai / Erode'
         };
         try {
           const prev = JSON.parse(localStorage.getItem('meat_corner_delivery_alerts') || '[]');
@@ -888,7 +888,7 @@ export const api = {
       storeName: 'MEAT CORNER',
       contactPhone: '+91 98765 43210',
       contactEmail: 'support@meatcorner.in',
-      address: '142 Main Road, Erode, Tamil Nadu 638116',
+      address: '115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116',
       freeDeliveryAbove: 499,
       baseDeliveryCharge: 30,
       minOrderAmount: 150,
@@ -1217,7 +1217,7 @@ export const api = {
       storeName: 'MEAT CORNER',
       contactPhone: '+91 98765 43210',
       contactEmail: 'support@meatcorner.in',
-      address: '142 Main Road, Erode, Tamil Nadu 638116',
+      address: '115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116',
       freeDeliveryAbove: 499,
       baseDeliveryCharge: 30,
       perKmCharge: 8,

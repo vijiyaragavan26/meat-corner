@@ -44,7 +44,7 @@ export const PrivacyPolicyPage: React.FC = () => {
               <span>Introduction & Commitment</span>
             </h2>
             <p className="text-gray-600 text-xs sm:text-sm">
-              At <strong>MEAT CORNER</strong> (operating from Kanjikovil, Erode, Tamil Nadu), we are passionately committed to protecting your privacy and safeguarding your personal information. This Privacy Policy details how we collect, process, store, and protect your information when you browse our storefront, register an account, or order fresh chicken cuts for express home delivery.
+              At <strong>MEAT CORNER</strong> (operating from 115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116, Tamil Nadu), we are passionately committed to protecting your privacy and safeguarding your personal information. This Privacy Policy details how we collect, process, store, and protect your information when you browse our storefront, register an account, or order fresh chicken cuts for express home delivery.
             </p>
           </section>
 
@@ -143,7 +143,7 @@ export const PrivacyPolicyPage: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2 text-brand-900 font-medium">
                 <MapPin className="w-4 h-4 text-brand-700 shrink-0" />
-                <span>Erode, Tamil Nadu 638116</span>
+                <span>115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116</span>
               </div>
             </div>
           </section>

@@ -15,7 +15,7 @@ const LocationContext = createContext<LocationContextType | undefined>(undefined
 
 export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [pincode, setPincode] = useState<string>(localStorage.getItem('meat_corner_pincode') || '638116');
-  const [locationName, setLocationName] = useState<string>(localStorage.getItem('meat_corner_loc_name') || 'Kanjikovil, Erode');
+  const [locationName, setLocationName] = useState<string>(localStorage.getItem('meat_corner_loc_name') || 'Pallapalayam, Perundurai');
   const [isServiceable, setIsServiceable] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
