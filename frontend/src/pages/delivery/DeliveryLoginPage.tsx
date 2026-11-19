@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Bike, Lock, Mail, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Bike, Lock, Mail, ArrowRight, ShieldAlert, ShieldCheck, Eye, EyeOff, Clock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const DeliveryLoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, user } = useAuth();
+  const { login, user, logout } = useAuth();
 
   useEffect(() => {
     if (user && user.role === 'CUSTOMER') {
@@ -15,22 +15,49 @@ export const DeliveryLoginPage: React.FC = () => {
 
   const [identifier, setIdentifier] = useState('9360761595');
   const [password, setPassword] = useState('Poopesh@123');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Security brute-force protection
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutTimer, setLockoutTimer] = useState(0);
+
+  useEffect(() => {
+    if (lockoutTimer <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutTimer((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutTimer]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutTimer > 0) return;
+
     setIsLoading(true);
     setErrorMsg(null);
 
     try {
-      const user = await login({ identifier, email: identifier, password });
-      if (user.role !== 'DELIVERY_PARTNER' && user.role !== 'ADMIN') {
+      if (user && user.role !== 'DELIVERY_PARTNER' && user.role !== 'ADMIN') {
+        logout();
+      }
+
+      const authenticatedUser = await login({ identifier, email: identifier, password });
+      if (authenticatedUser.role !== 'DELIVERY_PARTNER' && authenticatedUser.role !== 'ADMIN') {
         throw new Error('Access denied. Valid delivery partner credentials required.');
       }
+      setFailedAttempts(0);
       navigate('/delivery/dashboard');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Delivery authentication failed');
+      const nextFailed = failedAttempts + 1;
+      setFailedAttempts(nextFailed);
+      if (nextFailed >= 5) {
+        setLockoutTimer(30);
+        setErrorMsg('Security lockout: 5 failed attempts. Please wait 30 seconds.');
+      } else {
+        setErrorMsg(err.message || `Authentication failed (${5 - nextFailed} attempts remaining).`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -44,13 +71,24 @@ export const DeliveryLoginPage: React.FC = () => {
             <Bike className="w-7 h-7" />
           </div>
           <h2 className="text-2xl font-black text-charcoal tracking-tight">Meat Corner Fleet</h2>
-          <p className="text-xs text-gray-500">Delivery Partner Application Portal</p>
+          <p className="text-xs text-gray-500">Authorized Delivery Driver Application Portal</p>
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-[10px] font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Encrypted Fleet Rider Security Gateway</span>
+          </div>
         </div>
 
         {errorMsg && (
           <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800 flex items-center">
             <ShieldAlert className="w-4 h-4 mr-2 text-red-600 flex-shrink-0" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {lockoutTimer > 0 && (
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 flex items-center space-x-2">
+            <Clock className="w-4 h-4 text-amber-600 animate-spin" />
+            <span>Security Lockout active: retry in {lockoutTimer}s</span>
           </div>
         )}
 
@@ -63,10 +101,11 @@ export const DeliveryLoginPage: React.FC = () => {
               <input
                 type="text"
                 required
+                disabled={lockoutTimer > 0}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="9360761595 or delivery@meatcorner.in"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-700"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-700 disabled:opacity-50"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
             </div>
@@ -78,23 +117,31 @@ export const DeliveryLoginPage: React.FC = () => {
             </label>
             <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
+                disabled={lockoutTimer > 0}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-700"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold outline-none focus:border-emerald-700 disabled:opacity-50"
               />
               <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-black py-3.5 rounded-xl shadow-lg shadow-emerald-700/20 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
+            disabled={isLoading || lockoutTimer > 0}
+            className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg shadow-emerald-700/20 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
           >
-            <span>{isLoading ? 'Authenticating Rider...' : 'Sign In to Driver App'}</span>
+            <span>{isLoading ? 'Verifying Clearance...' : lockoutTimer > 0 ? `Locked (${lockoutTimer}s)` : 'Sign In to Driver App'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
@@ -102,11 +149,12 @@ export const DeliveryLoginPage: React.FC = () => {
         <div className="pt-2 border-t border-gray-100">
           <button
             type="button"
+            disabled={lockoutTimer > 0}
             onClick={() => {
               setIdentifier('9360761595');
               setPassword('Poopesh@123');
             }}
-            className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-bold transition"
+            className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-bold transition disabled:opacity-50"
           >
             Fill Rider: 9360761595 / Poopesh@123
           </button>

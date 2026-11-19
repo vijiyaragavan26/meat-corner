@@ -59,6 +59,60 @@ const CustomerProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ child
   return <>{children}</>;
 };
 
+// Strict Admin Security Route Guard: only users with ADMIN role can access
+const AdminProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-charcoal text-white">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Verifying Admin Clearance...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  // If a customer attempts to access Admin, bounce out to customer storefront
+  if (user.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Strict Delivery Partner Security Route Guard: only users with DELIVERY_PARTNER role can access
+const DeliveryProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-emerald-950 text-white">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Verifying Rider Clearance...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/delivery/login" replace />;
+  }
+
+  // If a customer attempts to access Delivery app, bounce out to customer storefront
+  if (user.role !== 'DELIVERY_PARTNER' && user.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 export const App: React.FC = () => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith('/admin');
@@ -135,9 +189,16 @@ export const App: React.FC = () => {
             }
           />
 
-          {/* Admin Portal */}
+          {/* Admin Portal (Strict Admin Security Protected) */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route
+            path="/admin"
+            element={
+              <AdminProtectedRoute>
+                <AdminLayout />
+              </AdminProtectedRoute>
+            }
+          >
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="orders" element={<AdminOrdersPage />} />
@@ -152,10 +213,24 @@ export const App: React.FC = () => {
             <Route path="support" element={<AdminSupportPage />} />
           </Route>
 
-          {/* Delivery Partner Portal */}
+          {/* Delivery Partner Portal (Strict Rider Security Protected) */}
           <Route path="/delivery/login" element={<DeliveryLoginPage />} />
-          <Route path="/delivery" element={<DeliveryDashboard />} />
-          <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
+          <Route
+            path="/delivery"
+            element={
+              <DeliveryProtectedRoute>
+                <DeliveryDashboard />
+              </DeliveryProtectedRoute>
+            }
+          />
+          <Route
+            path="/delivery/dashboard"
+            element={
+              <DeliveryProtectedRoute>
+                <DeliveryDashboard />
+              </DeliveryProtectedRoute>
+            }
+          />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

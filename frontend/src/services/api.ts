@@ -31,12 +31,39 @@ const getHeaders = () => {
   return headers;
 };
 
-// Resilient API Caller that automatically falls back to demo mode if backend is unreachable, returns 405, or serves HTML SPA
+function getCurrentUserRole(): string | null {
+  try {
+    const raw = localStorage.getItem('meat_corner_user');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.role || null;
+  } catch {
+    return null;
+  }
+}
+
+// Resilient API Caller with Strict Role Security Enforcement
 async function callApi<T>(
   endpoint: string,
   options: RequestInit = {},
   fallbackGenerator?: () => T
 ): Promise<any> {
+  // Security Enforcement: Protect Admin endpoints
+  if (endpoint.startsWith('/admin') && !endpoint.startsWith('/admin/login')) {
+    const role = getCurrentUserRole();
+    if (role !== 'ADMIN') {
+      throw new Error('403 Forbidden: Administrator security clearance required.');
+    }
+  }
+
+  // Security Enforcement: Protect Delivery partner endpoints
+  if (endpoint.startsWith('/delivery') && !endpoint.startsWith('/delivery/login')) {
+    const role = getCurrentUserRole();
+    if (role !== 'DELIVERY_PARTNER' && role !== 'ADMIN') {
+      throw new Error('403 Forbidden: Delivery partner security clearance required.');
+    }
+  }
+
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
