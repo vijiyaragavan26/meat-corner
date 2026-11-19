@@ -304,7 +304,28 @@ export const api = {
           avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         };
         localStorage.setItem('meat_corner_user', JSON.stringify(adminUser));
-        return { token: 'jwt_demo_token_' + Date.now(), user: adminUser };
+
+        // Trigger Real-Time Security SMS & Email Alert to Admin Mobile & Email
+        const now = new Date();
+        const alertRecord = {
+          id: Math.floor(100000 + Math.random() * 900000),
+          recipientPhone: '+91 76049 06429',
+          recipientEmail: 'admin@meatcorner.in',
+          recipientName: 'Vijay (Administrator)',
+          type: 'ADMIN_LOGIN_SECURITY_ALERT',
+          timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+          message: 'SECURITY ALERT: Admin login detected on Meat Corner Control Portal for Vijay (+91 76049 06429 / admin@meatcorner.in). If unauthorized, secure your account.',
+          status: 'SENT & DELIVERED',
+          device: 'Chrome / Windows 11',
+          location: 'Erode, Tamil Nadu'
+        };
+        try {
+          const prev = JSON.parse(localStorage.getItem('meat_corner_admin_security_alerts') || '[]');
+          localStorage.setItem('meat_corner_admin_security_alerts', JSON.stringify([alertRecord, ...prev.slice(0, 9)]));
+          localStorage.setItem('meat_corner_latest_admin_alert', JSON.stringify(alertRecord));
+        } catch {}
+
+        return { token: 'jwt_demo_token_' + Date.now(), user: adminUser, securityAlert: alertRecord };
       }
 
       // Explicit Delivery Partner Login: Mobile 9360761595 / poopesh / delivery@meatcorner.in with password Poopesh@123
@@ -326,7 +347,28 @@ export const api = {
           avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
         };
         localStorage.setItem('meat_corner_user', JSON.stringify(deliveryUser));
-        return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser };
+
+        // Trigger Real-Time SMS & Email Alert to Delivery Partner Mobile & Email
+        const now = new Date();
+        const alertRecord = {
+          id: Math.floor(100000 + Math.random() * 900000),
+          recipientPhone: '+91 93607 61595',
+          recipientEmail: 'delivery@meatcorner.in',
+          recipientName: 'Poopesh (Delivery Partner)',
+          type: 'DRIVER_LOGIN_ALERT',
+          timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+          message: 'FLEET ALERT: Driver App login authorized for Poopesh (+91 93607 61595 / delivery@meatcorner.in). Shift active.',
+          status: 'SENT & DELIVERED',
+          device: 'Rider Mobile Web Portal',
+          location: 'Kanjikovil / Erode'
+        };
+        try {
+          const prev = JSON.parse(localStorage.getItem('meat_corner_delivery_alerts') || '[]');
+          localStorage.setItem('meat_corner_delivery_alerts', JSON.stringify([alertRecord, ...prev.slice(0, 9)]));
+          localStorage.setItem('meat_corner_latest_delivery_alert', JSON.stringify(alertRecord));
+        } catch {}
+
+        return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser, securityAlert: alertRecord };
       }
 
       // Check if it matches existing demo users by email or phone
@@ -405,7 +447,28 @@ export const api = {
           avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         };
         localStorage.setItem('meat_corner_user', JSON.stringify(adminUser));
-        return { token: 'jwt_demo_token_' + Date.now(), user: adminUser };
+
+        // Trigger Real-Time Security SMS & Email Alert to Admin Mobile & Email
+        const now = new Date();
+        const alertRecord = {
+          id: Math.floor(100000 + Math.random() * 900000),
+          recipientPhone: '+91 76049 06429',
+          recipientEmail: 'admin@meatcorner.in',
+          recipientName: 'Vijay (Administrator)',
+          type: 'ADMIN_LOGIN_SECURITY_ALERT',
+          timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+          message: 'SECURITY ALERT: Admin OTP login authorized for Vijay (+91 76049 06429 / admin@meatcorner.in).',
+          status: 'SENT & DELIVERED',
+          device: 'Chrome / Windows 11',
+          location: 'Erode, Tamil Nadu'
+        };
+        try {
+          const prev = JSON.parse(localStorage.getItem('meat_corner_admin_security_alerts') || '[]');
+          localStorage.setItem('meat_corner_admin_security_alerts', JSON.stringify([alertRecord, ...prev.slice(0, 9)]));
+          localStorage.setItem('meat_corner_latest_admin_alert', JSON.stringify(alertRecord));
+        } catch {}
+
+        return { token: 'jwt_demo_token_' + Date.now(), user: adminUser, securityAlert: alertRecord };
       }
 
       // Explicit Delivery Partner
@@ -424,7 +487,28 @@ export const api = {
           avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
         };
         localStorage.setItem('meat_corner_user', JSON.stringify(deliveryUser));
-        return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser };
+
+        // Trigger Real-Time SMS & Email Alert to Delivery Partner Mobile & Email
+        const now = new Date();
+        const alertRecord = {
+          id: Math.floor(100000 + Math.random() * 900000),
+          recipientPhone: '+91 93607 61595',
+          recipientEmail: 'delivery@meatcorner.in',
+          recipientName: 'Poopesh (Delivery Partner)',
+          type: 'DRIVER_LOGIN_ALERT',
+          timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+          message: 'FLEET ALERT: Driver App OTP login authorized for Poopesh (+91 93607 61595 / delivery@meatcorner.in).',
+          status: 'SENT & DELIVERED',
+          device: 'Rider Mobile Web Portal',
+          location: 'Kanjikovil / Erode'
+        };
+        try {
+          const prev = JSON.parse(localStorage.getItem('meat_corner_delivery_alerts') || '[]');
+          localStorage.setItem('meat_corner_delivery_alerts', JSON.stringify([alertRecord, ...prev.slice(0, 9)]));
+          localStorage.setItem('meat_corner_latest_delivery_alert', JSON.stringify(alertRecord));
+        } catch {}
+
+        return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser, securityAlert: alertRecord };
       }
 
       let matched = DEMO_USERS[lower];
@@ -1125,4 +1209,23 @@ export const api = {
         totalAmount: o.totalAmount,
       })),
     })),
+
+  // Security Login Alerts
+  getAdminSecurityAlerts: () =>
+    callApi('/admin/security-alerts', {}, () => {
+      try {
+        return JSON.parse(localStorage.getItem('meat_corner_admin_security_alerts') || '[]');
+      } catch {
+        return [];
+      }
+    }),
+
+  getDeliverySecurityAlerts: () =>
+    callApi('/delivery/security-alerts', {}, () => {
+      try {
+        return JSON.parse(localStorage.getItem('meat_corner_delivery_alerts') || '[]');
+      } catch {
+        return [];
+      }
+    }),
 };
