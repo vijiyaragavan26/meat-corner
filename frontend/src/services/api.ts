@@ -313,7 +313,9 @@ export const api = {
 
   removeCartItem: (id: string) =>
     callApi('/cart/items/' + id, { method: 'DELETE' }, () => {
-      liveCart.items = liveCart.items.filter((i: any) => i.id !== id);
+      liveCart.items = (liveCart.items || []).filter(
+        (i: any) => i.id !== id && i.productId !== id && i.variantId !== id
+      );
       return updateLiveCartPricing();
     }),
 

@@ -133,12 +133,19 @@ export const CartDrawer: React.FC = () => {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-sm text-charcoal truncate">{item.product?.name}</h4>
+                      <h4 className="font-bold text-sm text-charcoal truncate pr-2">{item.product?.name}</h4>
                       <button
-                        onClick={() => removeItem(item.id)}
-                        className="text-gray-400 hover:text-red-600 p-1 transition"
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeItem(item.id || item.productId);
+                        }}
+                        className="text-gray-400 hover:text-red-600 p-1.5 -mr-1 -mt-1 rounded-lg hover:bg-red-50 transition cursor-pointer active:scale-90"
+                        title="Delete item"
+                        aria-label="Delete item"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
 
@@ -165,27 +172,37 @@ export const CartDrawer: React.FC = () => {
                       </span>
 
                       {/* Quantity Stepper */}
-                      <div className="flex items-center space-x-2 bg-white rounded-lg border border-gray-200 p-1">
+                      <div className="flex items-center space-x-2 bg-white rounded-lg border border-gray-200 p-1 shadow-sm">
                         <button
-                          onClick={() => {
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             if ((item.quantity || 1) <= 1) {
-                              removeItem(item.id);
+                              removeItem(item.id || item.productId);
                             } else {
-                              updateQuantity(item.id, (item.quantity || 1) - 1);
+                              updateQuantity(item.id || item.productId, (item.quantity || 1) - 1);
                             }
                           }}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700 active:scale-95 transition"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 text-gray-700 hover:bg-brand-50 hover:text-brand-700 active:scale-90 transition font-bold cursor-pointer"
                           title="Reduce quantity"
+                          aria-label="Reduce quantity"
                         >
-                          <Minus className="w-3 h-3" />
+                          <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="text-xs font-bold w-4 text-center">{Math.max(1, item.quantity || 1)}</span>
+                        <span className="text-xs font-bold w-5 text-center select-none">{Math.max(1, item.quantity || 1)}</span>
                         <button
-                          onClick={() => updateQuantity(item.id, (item.quantity || 1) + 1)}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700 active:scale-95 transition"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateQuantity(item.id || item.productId, (item.quantity || 1) + 1);
+                          }}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 text-gray-700 hover:bg-brand-50 hover:text-brand-700 active:scale-90 transition font-bold cursor-pointer"
                           title="Increase quantity"
+                          aria-label="Increase quantity"
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
