@@ -4,6 +4,7 @@ import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { PincodeModal } from './components/common/PincodeModal';
 import { CartDrawer } from './components/cart/CartDrawer';
+import { useAuth } from './contexts/AuthContext';
 
 // Customer Pages
 import { HomePage } from './pages/customer/HomePage';
@@ -34,27 +35,105 @@ import { AdminSupportPage } from './pages/admin/AdminSupportPage';
 import { DeliveryLoginPage } from './pages/delivery/DeliveryLoginPage';
 import { DeliveryDashboard } from './pages/delivery/DeliveryDashboard';
 
+// Guard for Customer Portal: only signed-in customers can browse and use the store
+const CustomerProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-10 h-10 border-4 border-brand-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-gray-500 font-semibold">Verifying customer access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    const redirectUrl = location.pathname !== '/' ? `?redirect=${encodeURIComponent(location.pathname + location.search)}` : '';
+    return <Navigate to={`/login${redirectUrl}`} replace />;
+  }
+
+  return <>{children}</>;
+};
+
 export const App: React.FC = () => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith('/admin');
   const isDeliveryPath = location.pathname.startsWith('/delivery');
+  const isAuthPath = location.pathname === '/login';
+
+  const showCustomerChrome = !isAdminPath && !isDeliveryPath && !isAuthPath;
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Show Customer Header & Footer only on customer-facing routes */}
-      {!isAdminPath && !isDeliveryPath && <Header />}
+      {/* Show Customer Header & Footer only when authenticated and on customer-facing routes */}
+      {showCustomerChrome && <Header />}
 
       <div className="flex-1">
         <Routes>
-          {/* Customer Portal */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/products" element={<ProductListPage />} />
-          <Route path="/products/:id" element={<ProductDetailPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/orders/:id/confirmed" element={<OrderConfirmationPage />} />
-          <Route path="/orders/:id/track" element={<OrderTrackingPage />} />
-          <Route path="/account" element={<AccountPage />} />
+          {/* Customer Authentication Gate */}
           <Route path="/login" element={<AuthPage />} />
+
+          {/* Customer Portal (Protected - Requires Customer Sign In First) */}
+          <Route
+            path="/"
+            element={
+              <CustomerProtectedRoute>
+                <HomePage />
+              </CustomerProtectedRoute>
+            }
+          />
+          <Route
+            path="/products"
+            element={
+              <CustomerProtectedRoute>
+                <ProductListPage />
+              </CustomerProtectedRoute>
+            }
+          />
+          <Route
+            path="/products/:id"
+            element={
+              <CustomerProtectedRoute>
+                <ProductDetailPage />
+              </CustomerProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <CustomerProtectedRoute>
+                <CheckoutPage />
+              </CustomerProtectedRoute>
+            }
+          />
+          <Route
+            path="/orders/:id/confirmed"
+            element={
+              <CustomerProtectedRoute>
+                <OrderConfirmationPage />
+              </CustomerProtectedRoute>
+            }
+          />
+          <Route
+            path="/orders/:id/track"
+            element={
+              <CustomerProtectedRoute>
+                <OrderTrackingPage />
+              </CustomerProtectedRoute>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <CustomerProtectedRoute>
+                <AccountPage />
+              </CustomerProtectedRoute>
+            }
+          />
 
           {/* Admin Portal */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -84,10 +163,13 @@ export const App: React.FC = () => {
       </div>
 
       {/* Global Modals & Drawers */}
-      <PincodeModal />
-      <CartDrawer />
-
-      {!isAdminPath && !isDeliveryPath && <Footer />}
+      {showCustomerChrome && (
+        <>
+          <PincodeModal />
+          <CartDrawer />
+          <Footer />
+        </>
+      )}
     </div>
   );
 };

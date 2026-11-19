@@ -7,6 +7,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (credentials: any) => Promise<User>;
+  loginWithOtp: (identifier: string, otp: string) => Promise<User>;
+  sendOtp: (identifier: string) => Promise<{ success: boolean; message: string; otp?: string }>;
   register: (data: any) => Promise<User>;
   logout: () => void;
   isAdmin: boolean;
@@ -70,6 +72,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error(res.message || 'Login failed');
   };
 
+  const loginWithOtp = async (identifier: string, otp: string) => {
+    const res = await api.verifyOtp({ identifier, otp });
+    if (res.success && res.data.token) {
+      localStorage.setItem('meat_corner_token', res.data.token);
+      localStorage.setItem('meat_corner_user', JSON.stringify(res.data.user));
+      setToken(res.data.token);
+      setUser(res.data.user);
+      return res.data.user;
+    }
+    throw new Error(res.message || 'OTP verification failed');
+  };
+
+  const sendOtp = async (identifier: string) => {
+    const res = await api.sendOtp({ identifier });
+    return res.data || { success: true, message: 'OTP sent', otp: '123456' };
+  };
+
   const register = async (data: any) => {
     const res = await api.register(data);
     if (res.success && res.data.token) {
@@ -100,6 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isLoading,
         login,
+        loginWithOtp,
+        sendOtp,
         register,
         logout,
         isAdmin,

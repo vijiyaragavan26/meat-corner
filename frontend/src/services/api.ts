@@ -253,14 +253,106 @@ export const api = {
 
   login: (body: any) =>
     callApi('/auth/login', { method: 'POST', body: JSON.stringify(body) }, () => {
-      const email = (body.email || '').toLowerCase().trim();
-      const matched = DEMO_USERS[email] || {
-        id: 'usr_admin_1',
-        name: 'Karthik Raja (Admin)',
-        email: email || 'admin@meatcorner.in',
-        phone: '+919876543200',
-        role: email.includes('admin') ? 'ADMIN' : email.includes('deliv') ? 'DELIVERY_PARTNER' : 'CUSTOMER',
+      const rawId = (body.email || body.phone || body.identifier || '').trim();
+      const lower = rawId.toLowerCase();
+      const cleanPhone = rawId.replace(/\D/g, '');
+
+      // Check if it matches existing demo users by email or phone
+      let matched = DEMO_USERS[lower];
+      if (!matched && cleanPhone.length >= 10) {
+        matched = Object.values(DEMO_USERS).find((u) =>
+          (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10))
+        );
+      }
+
+      // Check stored customers
+      if (!matched) {
+        const storedCustomers = getStoredCustomers();
+        const found = storedCustomers.find(
+          (c) =>
+            (c.email && c.email.toLowerCase() === lower) ||
+            (c.phone && cleanPhone.length >= 10 && c.phone.replace(/\D/g, '').endsWith(cleanPhone.slice(-10)))
+        );
+        if (found) {
+          matched = {
+            id: found.id,
+            name: found.name,
+            email: found.email,
+            phone: found.phone,
+            role: 'CUSTOMER',
+          };
+        }
+      }
+
+      // Otherwise create a customer profile
+      if (!matched) {
+        const isEmail = lower.includes('@');
+        matched = {
+          id: 'usr_cust_' + (cleanPhone.slice(-4) || Date.now().toString().slice(-4)),
+          name: isEmail ? lower.split('@')[0].replace(/[^a-zA-Z]/g, ' ') || 'Customer' : 'Customer ' + (cleanPhone.slice(-4) || 'User'),
+          email: isEmail ? lower : `customer_${cleanPhone.slice(-4) || 'mobile'}@meatcorner.in`,
+          phone: cleanPhone ? (cleanPhone.startsWith('91') ? `+${cleanPhone}` : `+91${cleanPhone.slice(-10)}`) : '+919876543210',
+          role: lower.includes('admin') ? 'ADMIN' : lower.includes('deliv') ? 'DELIVERY_PARTNER' : 'CUSTOMER',
+        };
+      }
+
+      localStorage.setItem('meat_corner_user', JSON.stringify(matched));
+      return { token: 'jwt_demo_token_' + Date.now(), user: matched };
+    }),
+
+  sendOtp: (body: { identifier: string }) =>
+    callApi('/auth/send-otp', { method: 'POST', body: JSON.stringify(body) }, () => {
+      const otp = '123456';
+      sessionStorage.setItem('meat_corner_otp_' + body.identifier.trim(), otp);
+      return {
+        success: true,
+        message: '6-digit OTP verification code sent successfully to ' + body.identifier,
+        otp,
       };
+    }),
+
+  verifyOtp: (body: { identifier: string; otp: string }) =>
+    callApi('/auth/verify-otp', { method: 'POST', body: JSON.stringify(body) }, () => {
+      const rawId = body.identifier.trim();
+      const lower = rawId.toLowerCase();
+      const cleanPhone = rawId.replace(/\D/g, '');
+
+      let matched = DEMO_USERS[lower];
+      if (!matched && cleanPhone.length >= 10) {
+        matched = Object.values(DEMO_USERS).find((u) =>
+          (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10))
+        );
+      }
+
+      if (!matched) {
+        const storedCustomers = getStoredCustomers();
+        const found = storedCustomers.find(
+          (c) =>
+            (c.email && c.email.toLowerCase() === lower) ||
+            (c.phone && cleanPhone.length >= 10 && c.phone.replace(/\D/g, '').endsWith(cleanPhone.slice(-10)))
+        );
+        if (found) {
+          matched = {
+            id: found.id,
+            name: found.name,
+            email: found.email,
+            phone: found.phone,
+            role: 'CUSTOMER',
+          };
+        }
+      }
+
+      if (!matched) {
+        const isEmail = lower.includes('@');
+        matched = {
+          id: 'usr_cust_' + (cleanPhone.slice(-4) || Date.now().toString().slice(-4)),
+          name: isEmail ? lower.split('@')[0].replace(/[^a-zA-Z]/g, ' ') || 'Customer' : 'Customer ' + (cleanPhone.slice(-4) || 'User'),
+          email: isEmail ? lower : `customer_${cleanPhone.slice(-4) || 'mobile'}@meatcorner.in`,
+          phone: cleanPhone ? (cleanPhone.startsWith('91') ? `+${cleanPhone}` : `+91${cleanPhone.slice(-10)}`) : '+919876543210',
+          role: 'CUSTOMER',
+        };
+      }
+
       localStorage.setItem('meat_corner_user', JSON.stringify(matched));
       return { token: 'jwt_demo_token_' + Date.now(), user: matched };
     }),
