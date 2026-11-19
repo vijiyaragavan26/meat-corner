@@ -44,7 +44,7 @@ export const PrivacyPolicyPage: React.FC = () => {
               <span>Introduction & Commitment</span>
             </h2>
             <p className="text-gray-600 text-xs sm:text-sm">
-              At <strong>MEAT CORNER</strong> (operating from 115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116, Tamil Nadu), we are passionately committed to protecting your privacy and safeguarding your personal information. This Privacy Policy details how we collect, process, store, and protect your information when you browse our storefront, register an account, or order fresh chicken cuts for express home delivery.
+              At <strong>M.P.M Meat corner</strong> (operating under brand name <strong>MEAT CORNER</strong>, FSSAI Registration No: <strong className="font-mono text-emerald-700">22426064000473</strong>, located at 115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116, Tamil Nadu), we are passionately committed to protecting your privacy and safeguarding your personal information. This Privacy Policy details how we collect, process, store, and protect your information when you browse our storefront, register an account, or order fresh chicken cuts for express home delivery.
             </p>
           </section>
 

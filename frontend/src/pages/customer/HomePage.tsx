@@ -108,7 +108,7 @@ export const HomePage: React.FC = () => {
               </div>
 
               {/* Trust Badges */}
-              <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/10 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-white/10 text-xs">
                 <div>
                   <p className="font-extrabold text-white text-base">100%</p>
                   <p className="text-gray-400">Halal Certified</p>
@@ -120,6 +120,10 @@ export const HomePage: React.FC = () => {
                 <div>
                   <p className="font-extrabold text-white text-base">Zero</p>
                   <p className="text-gray-400">Antibiotic Residue</p>
+                </div>
+                <div>
+                  <p className="font-extrabold text-emerald-400 text-base">FSSAI</p>
+                  <p className="text-gray-300 font-mono text-[10px]">22426064000473</p>
                 </div>
               </div>
             </div>

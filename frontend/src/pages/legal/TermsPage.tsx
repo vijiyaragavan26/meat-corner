@@ -41,11 +41,20 @@ export const TermsPage: React.FC = () => {
           <section className="space-y-3">
             <h2 className="text-lg font-black text-charcoal flex items-center space-x-2 border-b border-gray-100 pb-2">
               <span className="text-brand-700 font-mono">01.</span>
-              <span>Overview & Agreement</span>
+              <span>Overview & FSSAI Food Safety Licensing</span>
             </h2>
             <p className="text-gray-600 text-xs sm:text-sm">
-              These Terms and Conditions constitute a legally binding agreement between you (the customer) and <strong>MEAT CORNER</strong>. By registering an account, accessing our portal, or placing an order for fresh chicken products, you acknowledge and agree to be bound by these terms.
+              These Terms and Conditions constitute a legally binding agreement between you (the customer) and <strong>M.P.M Meat corner</strong> (operating under brand name <strong>MEAT CORNER</strong>). Our food business operations are officially licensed and registered under the Food Safety and Standards Authority of India (FSSAI), Government of Tamil Nadu:
             </p>
+            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-xs space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-emerald-900">🏛️ FSSAI Registration No: <strong className="font-mono text-sm text-emerald-800">22426064000473</strong></span>
+                <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">Fee Paid Upto: 20-09-2027</span>
+              </div>
+              <p className="text-emerald-800">
+                <strong>FBO Name:</strong> M.P.M Meat corner • <strong>Category:</strong> 08 - Meat and meat products, including poultry & game (FSS Act, 2006).
+              </p>
+            </div>
           </section>
 
           {/* Section 2 */}

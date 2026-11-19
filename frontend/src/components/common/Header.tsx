@@ -46,7 +46,7 @@ export const Header: React.FC = () => {
           <div className="flex items-center space-x-4">
             <span className="flex items-center font-medium">
               <span className="inline-block w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></span>
-              {t('freshness_guarantee')} • Halal Certified
+              {t('freshness_guarantee')} • Halal Certified • FSSAI Reg: 22426064000473
             </span>
             <span className="text-brand-200">|</span>
             <span className="text-brand-100">⚡ {t('express_delivery')}</span>
