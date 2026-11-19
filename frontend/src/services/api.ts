@@ -102,28 +102,67 @@ function saveLiveOrders(orders: any[]) {
     localStorage.setItem('meat_corner_live_orders', JSON.stringify(orders));
   } catch {}
 }
-let liveCart: any = {
-  id: 'cart_demo',
-  items: [],
-  subtotal: 0,
-  deliveryCharge: 30,
-  taxAmount: 0,
-  discountAmount: 0,
-  totalAmount: 30,
-  pricing: {
+function getStoredCart(): any {
+  try {
+    const saved = localStorage.getItem('meat_corner_live_cart');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && Array.isArray(parsed.items)) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return {
+    id: 'cart_demo',
+    items: [],
     subtotal: 0,
-    deliveryFee: 30,
-    discount: 0,
-    tax: 0,
-    total: 30,
-    freeDeliveryThreshold: 499,
-    freeDeliveryRemaining: 499
-  }
-};
+    deliveryCharge: 30,
+    taxAmount: 0,
+    discountAmount: 0,
+    totalAmount: 30,
+    pricing: {
+      subtotal: 0,
+      deliveryFee: 30,
+      discount: 0,
+      tax: 0,
+      total: 30,
+      freeDeliveryThreshold: 499,
+      freeDeliveryRemaining: 499
+    }
+  };
+}
+
+let liveCart: any = getStoredCart();
+
+function saveLiveCart() {
+  try {
+    localStorage.setItem('meat_corner_live_cart', JSON.stringify(liveCart));
+  } catch {}
+}
 
 function updateLiveCartPricing() {
+  // Ensure each cart item has complete product and variant details
+  liveCart.items.forEach((it: any) => {
+    if (!it.product) {
+      it.product = DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
+    }
+    if (!it.variant) {
+      const prod = it.product || DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
+      it.variant =
+        prod.variants?.find((v: any) => v.id === it.variantId) ||
+        prod.variants?.[0] || {
+          id: it.variantId || 'var_default',
+          productId: prod.id,
+          label: '500g',
+          weightGrams: 500,
+          price: prod.basePrice || 250,
+          inStock: true
+        };
+    }
+  });
+
   const subtotal = liveCart.items.reduce((sum: number, it: any) => {
-    const price = it.product?.basePrice || 160;
+    const price = it.variant?.price ?? it.product?.basePrice ?? 250;
     return sum + price * (it.quantity || 1);
   }, 0);
   const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
@@ -144,6 +183,7 @@ function updateLiveCartPricing() {
     freeDeliveryThreshold: 499,
     freeDeliveryRemaining: Math.max(0, 499 - subtotal)
   };
+  saveLiveCart();
   return liveCart;
 }
 
@@ -209,16 +249,45 @@ export const api = {
   addToCart: (body: any) =>
     callApi('/cart/items', { method: 'POST', body: JSON.stringify(body) }, () => {
       const prod = DEMO_PRODUCTS.find((p) => p.id === body.productId) || DEMO_PRODUCTS[0];
-      const newItem = {
-        id: 'citem_' + Date.now(),
-        productId: prod.id,
-        variantId: body.variantId,
-        product: prod,
-        quantity: body.quantity || 1,
-        cuttingOption: body.cuttingOption || 'Curry Cut (Medium)',
-        cleaningOption: body.cleaningOption || 'Standard Clean',
-      };
-      liveCart.items.push(newItem);
+      const variant =
+        prod.variants?.find((v: any) => v.id === body.variantId) ||
+        prod.variants?.[0] || {
+          id: body.variantId || 'var_default',
+          productId: prod.id,
+          label: '500g',
+          weightGrams: 500,
+          price: prod.basePrice || 250,
+          inStock: true,
+        };
+
+      const cuttingOpt = body.cuttingOption || prod.cuttingOptions?.[0] || 'Curry Cut (Medium)';
+      const cleaningOpt = body.cleaningOption || prod.cleaningOptions?.[0] || 'Standard Clean';
+
+      const existingItem = liveCart.items.find(
+        (it: any) =>
+          it.productId === prod.id &&
+          it.variantId === variant.id &&
+          it.cuttingOption === cuttingOpt &&
+          it.cleaningOption === cleaningOpt
+      );
+
+      if (existingItem) {
+        existingItem.quantity = (existingItem.quantity || 1) + (body.quantity || 1);
+        existingItem.variant = variant;
+        existingItem.product = prod;
+      } else {
+        const newItem = {
+          id: 'citem_' + Date.now(),
+          productId: prod.id,
+          variantId: variant.id,
+          variant: variant,
+          product: prod,
+          quantity: body.quantity || 1,
+          cuttingOption: cuttingOpt,
+          cleaningOption: cleaningOpt,
+        };
+        liveCart.items.push(newItem);
+      }
       return updateLiveCartPricing();
     }),
 
@@ -278,8 +347,8 @@ export const api = {
             productName: it.product?.name || 'Chicken Curry Cut (Skinless)',
             variantLabel: it.variant?.label || '500g',
             quantity: it.quantity || 1,
-            unitPrice: it.product?.basePrice || 250,
-            totalPrice: (it.product?.basePrice || 250) * (it.quantity || 1),
+            unitPrice: it.variant?.price || it.product?.basePrice || 250,
+            totalPrice: (it.variant?.price || it.product?.basePrice || 250) * (it.quantity || 1),
             cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
             cleaningOption: it.cleaningOption || 'Standard Clean'
           }))

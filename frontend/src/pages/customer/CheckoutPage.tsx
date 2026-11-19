@@ -455,12 +455,12 @@ export const CheckoutPage: React.FC = () => {
                   <div>
                     <h5 className="font-bold text-charcoal">{it.product?.name}</h5>
                     <p className="text-[11px] text-gray-500">
-                      {it.variant?.label} • {it.cuttingOption}
+                      {it.variant?.label || '500g'} • {it.cuttingOption}
                     </p>
                     <span className="text-gray-400">Qty: {it.quantity}</span>
                   </div>
                   <span className="font-extrabold text-charcoal">
-                    ₹{(it.variant?.price || 0) * it.quantity}
+                    ₹{((it.variant?.price ?? it.product?.basePrice) || 250) * it.quantity}
                   </span>
                 </div>
               ))}

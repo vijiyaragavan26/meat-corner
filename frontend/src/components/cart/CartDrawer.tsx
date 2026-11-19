@@ -144,7 +144,7 @@ export const CartDrawer: React.FC = () => {
 
                     <div className="flex flex-wrap gap-1 mt-1">
                       <span className="text-[10px] font-semibold bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">
-                        {item.variant?.label || 'Pack'}
+                        {item.variant?.label || '500g'}
                       </span>
                       {item.cuttingOption && (
                         <span className="text-[10px] font-semibold bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
@@ -155,7 +155,7 @@ export const CartDrawer: React.FC = () => {
 
                     <div className="flex justify-between items-center mt-3">
                       <span className="font-extrabold text-brand-700 text-sm">
-                        ₹{(item.variant?.price || 0) * item.quantity}
+                        ₹{((item.variant?.price ?? item.product?.basePrice) || 250) * item.quantity}
                       </span>
 
                       {/* Quantity Stepper */}
