@@ -618,6 +618,15 @@ export const AuthPage: React.FC = () => {
             </form>
           )}
         </div>
+
+        {/* Legal & Compliance Links */}
+        <div className="mt-6 text-center text-xs text-gray-400 space-x-3">
+          <Link to="/privacy-policy" className="hover:text-brand-700 transition">Privacy Policy</Link>
+          <span>•</span>
+          <Link to="/terms-and-conditions" className="hover:text-brand-700 transition">Terms & Conditions</Link>
+          <span>•</span>
+          <Link to="/refund-policy" className="hover:text-brand-700 transition">Refund Policy</Link>
+        </div>
       </div>
     </div>
   );

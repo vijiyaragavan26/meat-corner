@@ -95,6 +95,21 @@ export const Footer: React.FC = () => {
                   Express Checkout
                 </Link>
               </li>
+              <li>
+                <Link to="/privacy-policy" className="hover:text-white transition">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms-and-conditions" className="hover:text-white transition">
+                  Terms & Conditions
+                </Link>
+              </li>
+              <li>
+                <Link to="/refund-policy" className="hover:text-white transition">
+                  Refund Policy
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -124,11 +139,11 @@ export const Footer: React.FC = () => {
 
         <div className="pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500">
           <p>© 2026 MEAT CORNER. All rights reserved. Exclusively Fresh Chicken Products.</p>
-          <div className="flex space-x-6 mt-4 md:mt-0">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-            <span>Refund Policy</span>
-            <span>FSSAI Lic. No: 12423005000128</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 md:mt-0">
+            <Link to="/privacy-policy" className="hover:text-white transition">Privacy Policy</Link>
+            <Link to="/terms-and-conditions" className="hover:text-white transition">Terms & Conditions</Link>
+            <Link to="/refund-policy" className="hover:text-white transition">Refund Policy</Link>
+            <span className="text-gray-600">FSSAI Lic. No: 12423005000128</span>
           </div>
         </div>
       </div>

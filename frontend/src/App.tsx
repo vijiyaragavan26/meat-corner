@@ -16,6 +16,11 @@ import { OrderTrackingPage } from './pages/customer/OrderTrackingPage';
 import { AccountPage } from './pages/customer/AccountPage';
 import { AuthPage } from './pages/customer/AuthPage';
 
+// Legal & Compliance Pages
+import { PrivacyPolicyPage } from './pages/legal/PrivacyPolicyPage';
+import { TermsPage } from './pages/legal/TermsPage';
+import { RefundPolicyPage } from './pages/legal/RefundPolicyPage';
+
 // Admin Pages
 import { AdminLoginPage } from './pages/admin/AdminLoginPage';
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -130,6 +135,14 @@ export const App: React.FC = () => {
         <Routes>
           {/* Customer Authentication Gate */}
           <Route path="/login" element={<AuthPage />} />
+
+          {/* Legal, Privacy & Compliance Policies (Publicly Accessible) */}
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms-and-conditions" element={<TermsPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/refund-policy" element={<RefundPolicyPage />} />
+          <Route path="/refunds" element={<RefundPolicyPage />} />
 
           {/* Customer Portal (Protected - Requires Customer Sign In First) */}
           <Route
