@@ -53,9 +53,12 @@ export const AdminOrdersPage: React.FC = () => {
         cancellationReason: reason
       });
       if (res.success) {
-        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.data : o)));
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder(res.data);
+        const updatedOrder = (res.data?.order || res.data) as Order;
+        if (updatedOrder && updatedOrder.id) {
+          setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+          if (selectedOrder?.id === orderId) {
+            setSelectedOrder(updatedOrder);
+          }
         }
       }
     } catch (err: any) {
@@ -74,9 +77,12 @@ export const AdminOrdersPage: React.FC = () => {
     try {
       const res = await api.assignDeliveryPartner(orderId, selectedPartnerId);
       if (res.success) {
-        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.data : o)));
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder(res.data);
+        const updatedOrder = (res.data?.order || res.data) as Order;
+        if (updatedOrder && updatedOrder.id) {
+          setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+          if (selectedOrder?.id === orderId) {
+            setSelectedOrder(updatedOrder);
+          }
         }
         alert('Delivery partner assigned successfully!');
       }
@@ -90,10 +96,15 @@ export const AdminOrdersPage: React.FC = () => {
   const filteredOrders = orders.filter((o) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
+    const recipient = o.deliveryAddressSnapshot?.recipientName?.toLowerCase() || '';
+    const recipientPhone = o.deliveryAddressSnapshot?.phone || '';
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       o.customerName?.toLowerCase().includes(q) ||
-      o.customerPhone?.includes(q)
+      o.customerPhone?.includes(q) ||
+      recipient.includes(q) ||
+      recipientPhone.includes(q) ||
+      o.deliveryAddressSnapshot?.area?.toLowerCase().includes(q)
     );
   });
 
@@ -199,8 +210,12 @@ export const AdminOrdersPage: React.FC = () => {
 
                     {/* Customer */}
                     <td className="py-3.5 px-4">
-                      <span className="font-bold text-charcoal block">{order.customerName || 'Customer'}</span>
-                      <span className="text-[11px] text-gray-500 font-mono">{order.customerPhone}</span>
+                      <span className="font-bold text-charcoal block">
+                        {order.deliveryAddressSnapshot?.recipientName || order.customerName || 'Customer'}
+                      </span>
+                      <span className="text-[11px] text-gray-500 font-mono">
+                        {order.deliveryAddressSnapshot?.phone || order.customerPhone}
+                      </span>
                       <span className="text-[10px] text-gray-400 block truncate max-w-[140px]">
                         {order.deliveryAddressSnapshot?.area}
                       </span>

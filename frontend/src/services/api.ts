@@ -469,7 +469,7 @@ export const api = {
         ord.status = status;
         saveLiveOrders(orders);
       }
-      return { success: true, order: ord };
+      return ord;
     }),
 
   verifyDeliveryOtp: (id: string, otp: string, cashCollected?: number) =>
@@ -558,7 +558,7 @@ export const api = {
         ord.status = body.status;
         saveLiveOrders(orders);
       }
-      return { success: true, order: ord };
+      return ord;
     }),
 
   assignDeliveryPartner: (id: string, deliveryPartnerId: string) =>
@@ -575,7 +575,7 @@ export const api = {
           ord.status = 'PARTNER_ASSIGNED';
           saveLiveOrders(orders);
         }
-        return { success: true, order: ord };
+        return ord;
       }
     ),
 
