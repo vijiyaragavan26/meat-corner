@@ -1,10 +1,18 @@
 import { User, Product, Category, Order, Cart } from '../types';
 
 export const DEMO_USERS: Record<string, User> = {
+  'vijiyaragavan26@gmail.com': {
+    id: 'usr_admin_1',
+    name: 'Vijay',
+    email: 'vijiyaragavan26@gmail.com',
+    phone: '+917604906429',
+    role: 'ADMIN',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+  },
   'admin@meatcorner.in': {
     id: 'usr_admin_1',
     name: 'Vijay',
-    email: 'admin@meatcorner.in',
+    email: 'vijiyaragavan26@gmail.com',
     phone: '+917604906429',
     role: 'ADMIN',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
@@ -12,7 +20,7 @@ export const DEMO_USERS: Record<string, User> = {
   '7604906429': {
     id: 'usr_admin_1',
     name: 'Vijay',
-    email: 'admin@meatcorner.in',
+    email: 'vijiyaragavan26@gmail.com',
     phone: '+917604906429',
     role: 'ADMIN',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
@@ -20,7 +28,7 @@ export const DEMO_USERS: Record<string, User> = {
   'vijay@meatcorner.in': {
     id: 'usr_admin_1',
     name: 'Vijay',
-    email: 'vijay@meatcorner.in',
+    email: 'vijiyaragavan26@gmail.com',
     phone: '+917604906429',
     role: 'ADMIN',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',

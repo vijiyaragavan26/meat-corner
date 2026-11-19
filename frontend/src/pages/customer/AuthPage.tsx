@@ -79,11 +79,10 @@ export const AuthPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await sendOtp(cleanId);
+      await sendOtp(cleanId);
       setIsOtpSent(true);
-      const code = res.otp || '123456';
-      setGeneratedOtp(code);
-      setSuccessMsg(`OTP sent! Your verification code is ${code} (Demo Test OTP)`);
+      setGeneratedOtp('');
+      setSuccessMsg(`6-digit OTP verification code sent to ${cleanId}. Please check your SMS or Email.`);
       setCountdown(30);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to send OTP. Please try again.');
@@ -374,15 +373,7 @@ export const AuthPage: React.FC = () => {
                             <label className="block text-xs font-bold uppercase tracking-wider text-gray-600">
                               Enter 6-Digit OTP *
                             </label>
-                            {generatedOtp && (
-                              <button
-                                type="button"
-                                onClick={() => setOtp(generatedOtp)}
-                                className="text-[10px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-lg border border-green-200 hover:bg-green-100"
-                              >
-                                Auto-Fill ({generatedOtp})
-                              </button>
-                            )}
+                            <span className="text-[10px] text-gray-400 font-medium">Sent to SMS / Email</span>
                           </div>
                           <div className="relative">
                             <input

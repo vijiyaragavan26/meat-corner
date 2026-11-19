@@ -106,7 +106,7 @@ export const AdminLoginPage: React.FC = () => {
                 disabled={lockoutTimer > 0}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="7604906429 or admin@meatcorner.in"
+                placeholder="7604906429 or vijiyaragavan26@gmail.com"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 disabled:opacity-50"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />

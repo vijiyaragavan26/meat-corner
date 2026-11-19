@@ -44,11 +44,11 @@ export const AdminDashboard: React.FC = () => {
           const initial = [{
             id: 882910,
             recipientPhone: '+91 76049 06429',
-            recipientEmail: 'admin@meatcorner.in',
+            recipientEmail: 'vijiyaragavan26@gmail.com',
             recipientName: 'Vijay (Administrator)',
             type: 'ADMIN_LOGIN_SECURITY_ALERT',
             timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
-            message: 'SECURITY ALERT: Admin login authorized for Vijay (+91 76049 06429 / admin@meatcorner.in). Control portal accessed.',
+            message: 'SECURITY ALERT: Admin login authorized for Vijay (+91 76049 06429 / vijiyaragavan26@gmail.com). Control portal accessed.',
             status: 'SENT & DELIVERED',
             device: 'Chrome / Windows 11',
             location: 'Erode, Tamil Nadu'
@@ -69,11 +69,11 @@ export const AdminDashboard: React.FC = () => {
     const newAlert = {
       id: Math.floor(100000 + Math.random() * 900000),
       recipientPhone: '+91 76049 06429',
-      recipientEmail: 'admin@meatcorner.in',
+      recipientEmail: 'vijiyaragavan26@gmail.com',
       recipientName: 'Vijay (Administrator)',
       type: 'MANUAL_SECURITY_PING',
       timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
-      message: 'SECURITY TEST: Real-time SMS & Email dispatch confirmed for Admin Vijay (+91 76049 06429 / admin@meatcorner.in).',
+      message: 'SECURITY TEST: Real-time SMS & Email dispatch confirmed for Admin Vijay (+91 76049 06429 / vijiyaragavan26@gmail.com).',
       status: 'SENT & DELIVERED',
       device: 'Chrome / Windows 11',
       location: 'Erode, Tamil Nadu'
@@ -135,7 +135,7 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
                 <h2 className="text-sm font-bold text-white mt-1">
-                  Login notification sent to Admin Vijay (+91 76049 06429 / admin@meatcorner.in)
+                  Login notification sent to Admin Vijay (+91 76049 06429 / vijiyaragavan26@gmail.com)
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-300 mt-1.5">
                   <span className="inline-flex items-center space-x-1">
@@ -144,7 +144,7 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                   <span className="inline-flex items-center space-x-1">
                     <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Email sent to <strong className="text-white">admin@meatcorner.in</strong></span>
+                    <span>Email sent to <strong className="text-white">vijiyaragavan26@gmail.com</strong></span>
                   </span>
                   <span className="inline-flex items-center space-x-1 text-gray-400">
                     <Clock className="w-3.5 h-3.5" />
@@ -414,7 +414,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
-              <span className="text-gray-400">Recipient: Vijay (+91 76049 06429 / admin@meatcorner.in)</span>
+              <span className="text-gray-400">Recipient: Vijay (+91 76049 06429 / vijiyaragavan26@gmail.com)</span>
               <button
                 onClick={() => setShowAuditModal(false)}
                 className="px-4 py-2 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800"

@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const sendOtp = async (identifier: string) => {
     const res = await api.sendOtp({ identifier });
-    return res.data || { success: true, message: 'OTP sent', otp: '123456' };
+    return res.data || { success: true, message: 'OTP sent' };
   };
 
   const register = async (data: any) => {
