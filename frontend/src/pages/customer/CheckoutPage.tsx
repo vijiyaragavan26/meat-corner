@@ -48,15 +48,21 @@ export const CheckoutPage: React.FC = () => {
 
   useEffect(() => {
     if (user) {
+      if (user.name && !newRecipient) setNewRecipient(user.name);
+      if (user.phone && !newPhone) setNewPhone(user.phone);
+
       api.getAddresses().then((res) => {
-        if (res.success && res.data.length > 0) {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
           setAddresses(res.data);
           const def = res.data.find((a: Address) => a.isDefault) || res.data[0];
           setSelectedAddressId(def.id);
+          setIsAddingNewAddress(false);
         } else {
+          setAddresses([]);
           setIsAddingNewAddress(true);
         }
       }).catch(() => {
+        setAddresses([]);
         setIsAddingNewAddress(true);
       });
     } else {
@@ -150,6 +156,11 @@ export const CheckoutPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // If customer entered a new address, save it for their profile
+      if (isAddingNewAddress && payload.newAddress) {
+        api.addAddress(payload.newAddress).catch(() => {});
+      }
+
       // 1. Create order on backend (server calculates exact amounts and checks stock)
       const res = await api.createOrder(payload);
       if (!res.success) {

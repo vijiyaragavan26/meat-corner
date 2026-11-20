@@ -1103,27 +1103,79 @@ export const api = {
 
   // Customer Management
   getAddresses: () =>
-    callApi('/customer/addresses', {}, () => [
-      {
-        id: 'addr_1',
-        label: 'Home',
-        recipientName: 'Priya Dharshini',
-        phone: '+919876543210',
-        line1: 'Plot No 24, Gandhi Nagar',
-        area: 'Kanjikovil',
-        city: 'Erode',
-        pincode: '638116',
-        isDefault: true,
-      },
-    ]),
+    callApi('/customer/addresses', {}, () => {
+      let currentUserId = 'guest';
+      try {
+        const userRaw = localStorage.getItem('meat_corner_user');
+        if (userRaw) {
+          const u = JSON.parse(userRaw);
+          if (u?.id) currentUserId = u.id;
+        }
+        const saved = localStorage.getItem(`meat_corner_addresses_${currentUserId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed;
+          }
+        }
+      } catch {}
+      return [];
+    }),
 
   addAddress: (body: any) =>
-    callApi('/customer/addresses', { method: 'POST', body: JSON.stringify(body) }, () => ({
-      id: 'addr_' + Date.now(),
-      ...body,
-    })),
+    callApi('/customer/addresses', { method: 'POST', body: JSON.stringify(body) }, () => {
+      let currentUserId = 'guest';
+      let currentList: any[] = [];
+      try {
+        const userRaw = localStorage.getItem('meat_corner_user');
+        if (userRaw) {
+          const u = JSON.parse(userRaw);
+          if (u?.id) currentUserId = u.id;
+        }
+        const saved = localStorage.getItem(`meat_corner_addresses_${currentUserId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) currentList = parsed;
+        }
+      } catch {}
 
-  deleteAddress: (id: string) => callApi('/customer/addresses/' + id, { method: 'DELETE' }, () => ({})),
+      const newAddr = {
+        id: 'addr_' + Date.now(),
+        ...body,
+        isDefault: body.isDefault !== undefined ? body.isDefault : currentList.length === 0,
+      };
+
+      const updated = newAddr.isDefault
+        ? [newAddr, ...currentList.map((a: any) => ({ ...a, isDefault: false }))]
+        : [...currentList, newAddr];
+
+      try {
+        localStorage.setItem(`meat_corner_addresses_${currentUserId}`, JSON.stringify(updated));
+      } catch {}
+
+      return newAddr;
+    }),
+
+  deleteAddress: (id: string) =>
+    callApi('/customer/addresses/' + id, { method: 'DELETE' }, () => {
+      let currentUserId = 'guest';
+      try {
+        const userRaw = localStorage.getItem('meat_corner_user');
+        if (userRaw) {
+          const u = JSON.parse(userRaw);
+          if (u?.id) currentUserId = u.id;
+        }
+        const saved = localStorage.getItem(`meat_corner_addresses_${currentUserId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((a: any) => a.id !== id);
+            localStorage.setItem(`meat_corner_addresses_${currentUserId}`, JSON.stringify(filtered));
+          }
+        }
+      } catch {}
+      return { success: true, id };
+    }),
 
   getWishlist: () => callApi('/customer/wishlist', {}, () => DEMO_PRODUCTS.slice(0, 2)),
 

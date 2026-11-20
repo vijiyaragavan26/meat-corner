@@ -37,6 +37,16 @@ export const AccountPage: React.FC = () => {
   const [ticketOrderNumber, setTicketOrderNumber] = useState('');
   const [ticketSubmitted, setTicketSubmitted] = useState(false);
 
+  // Address management state
+  const [showAddAddressModal, setShowAddAddressModal] = useState(false);
+  const [newRecipient, setNewRecipient] = useState(user?.name || '');
+  const [newPhone, setNewPhone] = useState(user?.phone || '');
+  const [newLine1, setNewLine1] = useState('');
+  const [newArea, setNewArea] = useState('Perundurai');
+  const [newCity, setNewCity] = useState('Erode');
+  const [newPin, setNewPin] = useState('638116');
+  const [newLabel, setNewLabel] = useState('Home');
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -88,6 +98,43 @@ export const AccountPage: React.FC = () => {
       }
     } catch (err: any) {
       alert(err.message || 'Ticket creation failed');
+    }
+  };
+
+  const handleDeleteAddress = async (id: string) => {
+    setAddresses((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await api.deleteAddress(id);
+    } catch (err) {
+      console.error('Failed to delete address:', err);
+    }
+  };
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLine1.trim()) return;
+    try {
+      const res = await api.addAddress({
+        recipientName: newRecipient.trim() || user?.name || 'Customer',
+        phone: newPhone.trim() || user?.phone || '',
+        line1: newLine1.trim(),
+        area: newArea.trim(),
+        city: newCity.trim(),
+        pincode: newPin.trim(),
+        label: newLabel,
+        isDefault: addresses.length === 0,
+      });
+      if (res && res.success && res.data) {
+        setAddresses((prev) => [...prev, res.data]);
+      } else if (res?.data) {
+        setAddresses((prev) => [...prev, res.data]);
+      } else if (res && res.id) {
+        setAddresses((prev) => [...prev, res]);
+      }
+      setShowAddAddressModal(false);
+      setNewLine1('');
+    } catch (err) {
+      console.error('Failed to add address:', err);
     }
   };
 
@@ -245,25 +292,204 @@ export const AccountPage: React.FC = () => {
       {/* Tab 2: Addresses */}
       {activeTab === 'addresses' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {addresses.map((addr) => (
-              <div key={addr.id} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded">
-                    {addr.label}
-                  </span>
-                  {addr.isDefault && (
-                    <span className="text-[10px] text-green-700 font-bold">Default</span>
-                  )}
-                </div>
-                <h4 className="font-bold text-sm text-charcoal">{addr.recipientName}</h4>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  {addr.line1}, {addr.area}, {addr.city} - {addr.pincode}
-                </p>
-                <p className="text-xs text-gray-600 font-semibold">📞 {addr.phone}</p>
-              </div>
-            ))}
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-sm text-charcoal">Saved Delivery Addresses</h3>
+              <p className="text-xs text-gray-400">Manage your delivery locations for fast order checkout</p>
+            </div>
+            <button
+              onClick={() => {
+                setNewRecipient(user?.name || '');
+                setNewPhone(user?.phone || '');
+                setShowAddAddressModal(true);
+              }}
+              className="inline-flex items-center space-x-1.5 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-3.5 py-2 rounded-xl transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add New Address</span>
+            </button>
           </div>
+
+          {addresses.length === 0 ? (
+            <div className="bg-white rounded-3xl p-10 border border-gray-100 text-center space-y-3 shadow-sm">
+              <div className="w-12 h-12 bg-brand-50 text-brand-700 rounded-2xl flex items-center justify-center mx-auto">
+                <MapPin className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-sm text-charcoal">No Saved Addresses</h4>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                You have not added any delivery addresses yet. Add your home or delivery address for faster checkout.
+              </p>
+              <button
+                onClick={() => {
+                  setNewRecipient(user?.name || '');
+                  setNewPhone(user?.phone || '');
+                  setShowAddAddressModal(true);
+                }}
+                className="mt-2 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow transition"
+              >
+                Add Delivery Address
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {addresses.map((addr) => (
+                <div key={addr.id} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-2 relative group hover:border-gray-200 transition">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] uppercase font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded">
+                      {addr.label}
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      {addr.isDefault && (
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">Default</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAddress(addr.id)}
+                        title="Delete Address"
+                        className="text-gray-400 hover:text-red-600 transition p-1 rounded-lg hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <h4 className="font-bold text-sm text-charcoal">{addr.recipientName}</h4>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    {addr.line1}, {addr.area}, {addr.city} - {addr.pincode}
+                  </p>
+                  <p className="text-xs text-gray-600 font-semibold">📞 {addr.phone}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add Address Modal */}
+          {showAddAddressModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-gray-100 space-y-5 animate-scaleIn">
+                <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-5 h-5 text-brand-700" />
+                    <h3 className="font-black text-base text-charcoal">Add Delivery Address</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowAddAddressModal(false)}
+                    className="text-gray-400 hover:text-charcoal font-bold text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveAddress} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Recipient Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newRecipient}
+                        onChange={(e) => setNewRecipient(e.target.value)}
+                        placeholder="e.g. Ragavan"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Mobile Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={newPhone}
+                        onChange={(e) => setNewPhone(e.target.value)}
+                        placeholder="e.g. +91 84286 14692"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Street Address / House No. *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newLine1}
+                      onChange={(e) => setNewLine1(e.target.value)}
+                      placeholder="e.g. 115/1 Main Street, Anna Nagar"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-700"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Area / Locality *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newArea}
+                        onChange={(e) => setNewArea(e.target.value)}
+                        placeholder="e.g. Pallapalayam"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">City *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCity}
+                        onChange={(e) => setNewCity(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Pincode *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newPin}
+                        onChange={(e) => setNewPin(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs outline-none focus:border-brand-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Address Label</label>
+                    <div className="flex space-x-2">
+                      {['Home', 'Work', 'Other'].map((lbl) => (
+                        <button
+                          key={lbl}
+                          type="button"
+                          onClick={() => setNewLabel(lbl)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                            newLabel === lbl
+                              ? 'border-brand-700 bg-brand-50 text-brand-700'
+                              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-3 pt-3 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddAddressModal(false)}
+                      className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-charcoal bg-gray-100 rounded-xl transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-xs font-bold text-white bg-brand-700 hover:bg-brand-800 rounded-xl shadow transition"
+                    >
+                      Save Address
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
