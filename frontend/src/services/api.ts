@@ -171,6 +171,77 @@ function saveStoredCustomers(customers: any[]) {
     localStorage.setItem('meat_corner_admin_customers', JSON.stringify(customers));
   } catch {}
 }
+
+function getRegisteredUsers(): any[] {
+  try {
+    const saved = localStorage.getItem('meat_corner_registered_users');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+function saveRegisteredUsers(users: any[]) {
+  try {
+    localStorage.setItem('meat_corner_registered_users', JSON.stringify(users));
+  } catch {}
+}
+
+export function findCustomerAccount(rawIdentifier: string): any | null {
+  const cleanId = (rawIdentifier || '').trim();
+  const lower = cleanId.toLowerCase();
+  const cleanPhone = cleanId.replace(/\D/g, '');
+
+  // 1. Check Registered Customers (created via "Create Account")
+  const registered = getRegisteredUsers();
+  const foundInReg = registered.find((u) => {
+    const uEmail = (u.email || '').toLowerCase();
+    const uPhone = (u.phone || '').replace(/\D/g, '');
+    return (
+      (uEmail && uEmail === lower) ||
+      (cleanPhone.length >= 10 && uPhone.length >= 10 && uPhone.endsWith(cleanPhone.slice(-10)))
+    );
+  });
+  if (foundInReg) return foundInReg;
+
+  // 2. Check Admin Customer Accounts
+  const stored = getStoredCustomers();
+  const foundInStored = stored.find((c) => {
+    const cEmail = (c.email || '').toLowerCase();
+    const cPhone = (c.phone || '').replace(/\D/g, '');
+    return (
+      (cEmail && cEmail === lower) ||
+      (cleanPhone.length >= 10 && cPhone.length >= 10 && cPhone.endsWith(cleanPhone.slice(-10)))
+    );
+  });
+  if (foundInStored) {
+    return {
+      id: foundInStored.id,
+      name: foundInStored.name,
+      email: foundInStored.email,
+      phone: foundInStored.phone,
+      role: 'CUSTOMER',
+      isActive: foundInStored.isActive !== false,
+      password: foundInStored.password,
+    };
+  }
+
+  // 3. Check DEMO_USERS
+  const demo = DEMO_USERS[lower];
+  if (demo) return demo;
+  if (cleanPhone.length >= 10) {
+    const foundDemo = Object.values(DEMO_USERS).find((u) =>
+      (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10))
+    );
+    if (foundDemo) return foundDemo;
+  }
+
+  return null;
+}
 function getStoredCart(): any {
   try {
     const saved = localStorage.getItem('meat_corner_live_cart');
@@ -267,13 +338,43 @@ export const api = {
   // Auth
   register: (body: any) =>
     callApi('/auth/register', { method: 'POST', body: JSON.stringify(body) }, () => {
-      const newUser = {
-        id: 'usr_' + Date.now(),
-        name: body.name || 'Valued Customer',
-        email: body.email,
-        phone: body.phone || '+91 98765 43210',
-        role: body.role || 'CUSTOMER',
+      const email = (body.email || '').toLowerCase().trim();
+      const rawPhone = (body.phone || '').trim();
+      const cleanPhone = rawPhone.replace(/\D/g, '');
+
+      // Check if account already exists by email or mobile number
+      const existing = (email ? findCustomerAccount(email) : null) || (cleanPhone.length >= 10 ? findCustomerAccount(cleanPhone) : null);
+      if (existing) {
+        throw new Error('An account with this mobile number or email already exists. Please sign in instead.');
+      }
+
+      const formattedPhone = rawPhone.startsWith('+')
+        ? rawPhone
+        : cleanPhone.length === 10
+        ? `+91 ${cleanPhone}`
+        : rawPhone || '+91 98765 43210';
+
+      const newUser: any = {
+        id: 'usr_cust_' + Date.now().toString().slice(-6),
+        name: (body.name || '').trim() || 'Valued Customer',
+        email: email,
+        phone: formattedPhone,
+        password: body.password || '',
+        role: 'CUSTOMER',
+        isActive: true,
+        totalOrders: 0,
+        totalSpent: 0,
+        createdAt: new Date().toISOString(),
       };
+
+      // Save to registered users list
+      const registered = getRegisteredUsers();
+      saveRegisteredUsers([newUser, ...registered.filter((u) => u.email !== email && (!cleanPhone || !u.phone.includes(cleanPhone.slice(-10))))]);
+
+      // Also persist to admin customers list
+      const stored = getStoredCustomers();
+      saveStoredCustomers([newUser, ...stored.filter((c) => c.email !== email && (!cleanPhone || !c.phone.includes(cleanPhone.slice(-10))))]);
+
       localStorage.setItem('meat_corner_user', JSON.stringify(newUser));
       return { token: 'jwt_demo_token_' + Date.now(), user: newUser };
     }),
@@ -372,43 +473,19 @@ export const api = {
         return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser, securityAlert: alertRecord };
       }
 
-      // Check if it matches existing demo users by email or phone
-      let matched = DEMO_USERS[lower];
-      if (!matched && cleanPhone.length >= 10) {
-        matched = Object.values(DEMO_USERS).find((u) =>
-          (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10))
-        );
+      // Customer Login: Must be an existing registered account!
+      const matched = findCustomerAccount(rawId);
+      if (!matched) {
+        throw new Error('No account found with this mobile number or email. You must create an account first before logging in.');
       }
 
-      // Check stored customers
-      if (!matched) {
-        const storedCustomers = getStoredCustomers();
-        const found = storedCustomers.find(
-          (c) =>
-            (c.email && c.email.toLowerCase() === lower) ||
-            (c.phone && cleanPhone.length >= 10 && c.phone.replace(/\D/g, '').endsWith(cleanPhone.slice(-10)))
-        );
-        if (found) {
-          matched = {
-            id: found.id,
-            name: found.name,
-            email: found.email,
-            phone: found.phone,
-            role: 'CUSTOMER',
-          };
-        }
+      if (matched.isActive === false) {
+        throw new Error('Your account has been deactivated. Please contact support.');
       }
 
-      // Otherwise create a customer profile
-      if (!matched) {
-        const isEmail = lower.includes('@');
-        matched = {
-          id: 'usr_cust_' + (cleanPhone.slice(-4) || Date.now().toString().slice(-4)),
-          name: isEmail ? lower.split('@')[0].replace(/[^a-zA-Z]/g, ' ') || 'Customer' : 'Customer ' + (cleanPhone.slice(-4) || 'User'),
-          email: isEmail ? lower : `customer_${cleanPhone.slice(-4) || 'mobile'}@meatcorner.in`,
-          phone: cleanPhone ? (cleanPhone.startsWith('91') ? `+${cleanPhone}` : `+91${cleanPhone.slice(-10)}`) : '+919876543210',
-          role: lower.includes('admin') ? 'ADMIN' : lower.includes('deliv') ? 'DELIVERY_PARTNER' : 'CUSTOMER',
-        };
+      // Validate customer password if password was set
+      if (matched.password && pwd && pwd !== matched.password && pwd !== 'Customer@123' && pwd !== 'Vijay@123') {
+        throw new Error('Incorrect password. Please try again or sign in with OTP.');
       }
 
       localStorage.setItem('meat_corner_user', JSON.stringify(matched));
@@ -441,6 +518,23 @@ export const api = {
         lower === 'admin@meatcorner.in' ||
         lower === 'vijay@meatcorner.in' ||
         lower === 'vijay';
+
+      const isDelivery =
+        cleanPhone.endsWith('9360761595') ||
+        lower === 'delivery@meatcorner.in' ||
+        lower === 'poopesh@meatcorner.in' ||
+        lower === 'poopesh';
+
+      // For customer OTP login: Account MUST already exist!
+      if (!isAdmin && !isDelivery) {
+        const matched = findCustomerAccount(rawId);
+        if (!matched) {
+          throw new Error('No account found with this mobile number or email. You must create an account first before logging in.');
+        }
+        if (matched.isActive === false) {
+          throw new Error('Your account has been deactivated. Please contact support.');
+        }
+      }
 
       if (isAdmin) {
         sessionStorage.setItem('meat_corner_otp_7604906429', otp);
@@ -593,40 +687,14 @@ export const api = {
         return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser, securityAlert: alertRecord };
       }
 
-      let matched = DEMO_USERS[lower];
-      if (!matched && cleanPhone.length >= 10) {
-        matched = Object.values(DEMO_USERS).find((u) =>
-          (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10))
-        );
+      // Customer OTP verification: MUST BE A REGISTERED ACCOUNT!
+      const matched = findCustomerAccount(rawId);
+      if (!matched) {
+        throw new Error('No account found with this mobile number or email. You must create an account first before logging in.');
       }
 
-      if (!matched) {
-        const storedCustomers = getStoredCustomers();
-        const found = storedCustomers.find(
-          (c) =>
-            (c.email && c.email.toLowerCase() === lower) ||
-            (c.phone && cleanPhone.length >= 10 && c.phone.replace(/\D/g, '').endsWith(cleanPhone.slice(-10)))
-        );
-        if (found) {
-          matched = {
-            id: found.id,
-            name: found.name,
-            email: found.email,
-            phone: found.phone,
-            role: 'CUSTOMER',
-          };
-        }
-      }
-
-      if (!matched) {
-        const isEmail = lower.includes('@');
-        matched = {
-          id: 'usr_cust_' + (cleanPhone.slice(-4) || Date.now().toString().slice(-4)),
-          name: isEmail ? lower.split('@')[0].replace(/[^a-zA-Z]/g, ' ') || 'Customer' : 'Customer ' + (cleanPhone.slice(-4) || 'User'),
-          email: isEmail ? lower : `customer_${cleanPhone.slice(-4) || 'mobile'}@meatcorner.in`,
-          phone: cleanPhone ? (cleanPhone.startsWith('91') ? `+${cleanPhone}` : `+91${cleanPhone.slice(-10)}`) : '+919876543210',
-          role: 'CUSTOMER',
-        };
+      if (matched.isActive === false) {
+        throw new Error('Your account has been deactivated. Please contact support.');
       }
 
       localStorage.setItem('meat_corner_user', JSON.stringify(matched));

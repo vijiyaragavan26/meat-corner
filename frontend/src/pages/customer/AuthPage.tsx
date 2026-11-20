@@ -139,8 +139,17 @@ export const AuthPage: React.FC = () => {
       setErrorMsg('Please enter your full name.');
       return;
     }
-    if (!regEmail.trim() && !regPhone.trim()) {
-      setErrorMsg('Please enter your email address or mobile number.');
+    const cleanPhone = regPhone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!regEmail.trim() || !regEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (!regPassword || regPassword.length < 6) {
+      setErrorMsg('Please create a password with at least 6 characters.');
       return;
     }
 
@@ -148,9 +157,9 @@ export const AuthPage: React.FC = () => {
     try {
       await register({
         name: regName.trim(),
-        email: regEmail.trim() || `cust_${Date.now()}@meatcorner.in`,
-        phone: regPhone.trim() || '+91 98765 43210',
-        password: regPassword || 'Customer@123',
+        email: regEmail.trim().toLowerCase(),
+        phone: regPhone.trim(),
+        password: regPassword,
         role: 'CUSTOMER'
       });
       navigate(redirect);
@@ -182,9 +191,9 @@ export const AuthPage: React.FC = () => {
         </Link>
 
         {/* Access Notice Badge */}
-        <div className="inline-flex items-center bg-brand-50 border border-brand-200 text-brand-800 text-[11px] font-bold px-3 py-1 rounded-full space-x-1.5 shadow-sm">
+        <div className="inline-flex items-center bg-brand-50 border border-brand-200 text-brand-800 text-[11px] font-bold px-3.5 py-1 rounded-full space-x-1.5 shadow-sm">
           <ShieldCheck className="w-3.5 h-3.5 text-brand-700" />
-          <span>Customer Sign-In Required to Access Store</span>
+          <span>Account Registration Required to Access Store</span>
         </div>
 
         <h1 className="text-2xl sm:text-3xl font-black text-charcoal">
@@ -192,8 +201,8 @@ export const AuthPage: React.FC = () => {
         </h1>
         <p className="text-xs text-gray-500 max-w-xs mx-auto">
           {isRegister
-            ? 'Sign up to order antibiotic-free chicken cuts with express 30-45 min delivery.'
-            : 'Please sign in with your mobile number or email to start shopping.'}
+            ? 'First time shopping? Create an account to order antibiotic-free fresh chicken.'
+            : 'Please sign in with your registered mobile number or email.'}
         </p>
       </div>
 
@@ -236,9 +245,29 @@ export const AuthPage: React.FC = () => {
 
           {/* Feedback alerts */}
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800 flex items-start space-x-2">
-              <span className="text-base leading-none">⚠️</span>
-              <span>{errorMsg}</span>
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800 space-y-2.5">
+              <div className="flex items-start space-x-2">
+                <span className="text-base leading-none">⚠️</span>
+                <span>{errorMsg}</span>
+              </div>
+              {errorMsg.toLowerCase().includes('create an account first') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegister(true);
+                    if (identifier.includes('@')) {
+                      setRegEmail(identifier.trim());
+                    } else if (identifier.replace(/\D/g, '').length >= 10) {
+                      setRegPhone(identifier.trim());
+                    }
+                    setErrorMsg(null);
+                  }}
+                  className="w-full bg-brand-700 hover:bg-brand-800 text-white font-black py-2.5 px-3 rounded-xl text-xs uppercase tracking-wider transition text-center shadow-md flex items-center justify-center space-x-1.5"
+                >
+                  <span>Click Here to Create Account Now</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           )}
 
@@ -452,6 +481,13 @@ export const AuthPage: React.FC = () => {
             /* REGISTER VIEW */
             /* ============================================================ */
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start space-x-2">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span className="text-[11px] leading-relaxed">
+                  <strong>Create Account Required:</strong> New to Meat Corner? Please fill in your name, mobile, and email below to register your account before signing in.
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
                   Full Name *
