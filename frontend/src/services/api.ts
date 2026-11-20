@@ -46,7 +46,7 @@ function getCurrentUserRole(): string | null {
 async function callApi<T>(
   endpoint: string,
   options: RequestInit = {},
-  fallbackGenerator?: () => T
+  fallbackGenerator?: () => T | Promise<T>
 ): Promise<any> {
   // Security Enforcement: Protect Admin endpoints
   if (endpoint.startsWith('/admin') && !endpoint.startsWith('/admin/login')) {
@@ -73,7 +73,7 @@ async function callApi<T>(
     // Handle common static host errors (405 Method Not Allowed, 404, 502, 500)
     if (res.status === 405 || res.status === 404 || res.status === 502 || res.status === 500) {
       if (fallbackGenerator) {
-        return { success: true, data: fallbackGenerator() };
+        return { success: true, data: await fallbackGenerator() };
       }
     }
 
@@ -81,7 +81,7 @@ async function callApi<T>(
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
       if (fallbackGenerator) {
-        return { success: true, data: fallbackGenerator() };
+        return { success: true, data: await fallbackGenerator() };
       }
     }
 
@@ -91,23 +91,87 @@ async function callApi<T>(
       json = JSON.parse(text);
     } catch {
       if (fallbackGenerator) {
-        return { success: true, data: fallbackGenerator() };
+        return { success: true, data: await fallbackGenerator() };
       }
     }
 
     if (!res.ok || !json || json.success === false) {
       if (fallbackGenerator) {
-        return { success: true, data: fallbackGenerator() };
+        return { success: true, data: await fallbackGenerator() };
       }
       throw new Error(json?.message || `Request failed with status ${res.status}`);
     }
     return json;
   } catch (err: any) {
     if (fallbackGenerator) {
-      return { success: true, data: fallbackGenerator() };
+      return { success: true, data: await fallbackGenerator() };
     }
     throw err;
   }
+}
+
+// Supabase Cloud Database Configuration
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://ajiovbilwinoiyjvzhcv.supabase.co';
+const SUPABASE_ANON_KEY =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc';
+
+async function syncUserToSupabase(user: any, passwordHash?: string) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/Users`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        passwordHash: passwordHash || '$2a$10$fkPdY0F.JT0TxDAoz81RJ.VWoOtB8HfPqsdP1oeZ7i4lvXb9UuFAK',
+        role: 'CUSTOMER',
+        isActive: true,
+        createdAt: user.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+  } catch (err) {
+    console.warn('Could not sync user to Supabase:', err);
+  }
+}
+
+async function fetchSupabaseCustomers(): Promise<any[]> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/Users?select=*`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data
+          .filter((u: any) => u.role === 'CUSTOMER')
+          .map((u: any) => ({
+            id: u.id,
+            name: u.name || 'Valued Customer',
+            email: u.email || '',
+            phone: u.phone || '',
+            totalOrders: 0,
+            totalSpent: 0,
+            isActive: u.isActive !== false,
+            createdAt: u.createdAt || new Date().toISOString(),
+          }));
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch customers from Supabase:', e);
+  }
+  return [];
 }
 
 // In-Memory state for demo mode
@@ -132,6 +196,16 @@ function saveLiveOrders(orders: any[]) {
 
 const DEFAULT_CUSTOMERS = [
   {
+    id: 'usr_cust_ragavan_8428',
+    name: 'ragavan',
+    email: 'mariyappanv2005@gmail.com',
+    phone: '+918428614692',
+    totalOrders: 0,
+    totalSpent: 0,
+    isActive: true,
+    createdAt: '2026-11-20T06:40:00.000Z',
+  },
+  {
     id: 'usr_cust_1',
     name: 'Priya Dharshini',
     email: 'customer@meatcorner.in',
@@ -154,16 +228,49 @@ const DEFAULT_CUSTOMERS = [
 ];
 
 function getStoredCustomers(): any[] {
+  let list: any[] = [];
   try {
     const saved = localStorage.getItem('meat_corner_admin_customers');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        list = parsed;
       }
     }
   } catch {}
-  return [...DEFAULT_CUSTOMERS];
+
+  const map = new Map<string, any>();
+  // 1. Seed defaults first (guarantees ragavan is always present)
+  DEFAULT_CUSTOMERS.forEach((c) => {
+    const key = (c.phone || c.id).replace(/\D/g, '') || c.id;
+    map.set(key, { ...c });
+  });
+
+  // 2. Merge stored customers
+  list.forEach((c) => {
+    const key = (c.phone || c.id).replace(/\D/g, '') || c.id;
+    map.set(key, { ...map.get(key), ...c });
+  });
+
+  // 3. Merge registered users
+  const registered = getRegisteredUsers();
+  registered.forEach((u) => {
+    const key = (u.phone || u.id).replace(/\D/g, '') || u.id;
+    if (!map.has(key)) {
+      map.set(key, {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        totalOrders: 0,
+        totalSpent: 0,
+        isActive: u.isActive !== false,
+        createdAt: u.createdAt || new Date().toISOString(),
+      });
+    }
+  });
+
+  return Array.from(map.values());
 }
 
 function saveStoredCustomers(customers: any[]) {
@@ -374,6 +481,9 @@ export const api = {
       // Also persist to admin customers list
       const stored = getStoredCustomers();
       saveStoredCustomers([newUser, ...stored.filter((c) => c.email !== email && (!cleanPhone || !c.phone.includes(cleanPhone.slice(-10))))]);
+
+      // Synchronize immediately to Supabase Cloud Database
+      syncUserToSupabase(newUser, body.password).catch(() => {});
 
       localStorage.setItem('meat_corner_user', JSON.stringify(newUser));
       return { token: 'jwt_demo_token_' + Date.now(), user: newUser };
@@ -1194,23 +1304,42 @@ export const api = {
     ),
 
   getAdminCustomers: () =>
-    callApi('/admin/customers', {}, () => {
+    callApi('/admin/customers', {}, async () => {
       const stored = getStoredCustomers();
       const orders = getLiveOrders();
+      const supaUsers = await fetchSupabaseCustomers();
       const customerMap = new Map<string, any>();
-      stored.forEach((c) => customerMap.set(c.phone || c.id, { ...c }));
 
+      // 1. Supabase cloud customers
+      supaUsers.forEach((u) => {
+        const key = (u.phone || u.id).replace(/\D/g, '') || u.id;
+        customerMap.set(key, { ...u });
+      });
+
+      // 2. Merge stored and local customer registrations
+      stored.forEach((c) => {
+        const key = (c.phone || c.id).replace(/\D/g, '') || c.id;
+        if (customerMap.has(key)) {
+          customerMap.set(key, { ...customerMap.get(key), ...c });
+        } else {
+          customerMap.set(key, { ...c });
+        }
+      });
+
+      // 3. Compute order activity and lifetime spend
       orders.forEach((ord: any) => {
         const phone = ord.deliveryAddress?.phone || ord.userPhone || '+919876543210';
+        const key = phone.replace(/\D/g, '') || phone;
         const name = ord.deliveryAddress?.fullName || ord.userName || 'Priya Dharshini';
         const total = Number(ord.totalAmount) || 0;
-        if (customerMap.has(phone)) {
-          const existing = customerMap.get(phone);
-          // ensure customer has createdAt
+        if (customerMap.has(key)) {
+          const existing = customerMap.get(key);
+          existing.totalOrders = (existing.totalOrders || 0) + 1;
+          existing.totalSpent = (existing.totalSpent || 0) + total;
           if (!existing.createdAt) existing.createdAt = ord.createdAt || '2026-11-10T09:00:00.000Z';
         } else {
-          customerMap.set(phone, {
-            id: `usr_live_${phone.replace(/\D/g, '').slice(-4) || '9999'}`,
+          customerMap.set(key, {
+            id: `usr_live_${key.slice(-4) || '9999'}`,
             name,
             email: ord.userEmail || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@meatcorner.in`,
             phone,
@@ -1222,6 +1351,7 @@ export const api = {
         }
       });
       const list = Array.from(customerMap.values());
+      saveStoredCustomers(list);
       return list;
     }),
 
@@ -1237,6 +1367,18 @@ export const api = {
         return c;
       });
       saveStoredCustomers(updated);
+
+      // Sync status change to Supabase Cloud Database
+      fetch(`${SUPABASE_URL}/rest/v1/Users?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isActive: updatedIsActive }),
+      }).catch(() => {});
+
       return {
         id,
         isActive: updatedIsActive,
