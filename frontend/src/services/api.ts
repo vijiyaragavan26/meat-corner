@@ -116,6 +116,38 @@ const SUPABASE_ANON_KEY =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc';
 
+function getDeletedCustomerKeys(): Set<string> {
+  try {
+    const saved = localStorage.getItem('meat_corner_deleted_customer_keys');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed);
+      }
+    }
+  } catch {}
+  return new Set();
+}
+
+function saveDeletedCustomerKeys(set: Set<string>) {
+  try {
+    localStorage.setItem('meat_corner_deleted_customer_keys', JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+function isCustomerDeleted(c: any, deletedKeys: Set<string>): boolean {
+  if (!c) return false;
+  if (c.id && deletedKeys.has(c.id)) return true;
+  if (c.email && deletedKeys.has(c.email.toLowerCase())) return true;
+  const cleanPhone = (c.phone || '').replace(/\D/g, '');
+  if (cleanPhone) {
+    if (deletedKeys.has(cleanPhone)) return true;
+    if (cleanPhone.length >= 10 && deletedKeys.has(cleanPhone.slice(-10))) return true;
+  }
+  if (c.phone && deletedKeys.has(c.phone)) return true;
+  return false;
+}
+
 async function syncUserToSupabase(user: any, passwordHash?: string) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/Users`, {
@@ -154,8 +186,9 @@ async function fetchSupabaseCustomers(): Promise<any[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
+        const deletedKeys = getDeletedCustomerKeys();
         return data
-          .filter((u: any) => u.role === 'CUSTOMER')
+          .filter((u: any) => u.role === 'CUSTOMER' && !isCustomerDeleted(u, deletedKeys))
           .map((u: any) => ({
             id: u.id,
             name: u.name || 'Valued Customer',
@@ -239,22 +272,24 @@ function getStoredCustomers(): any[] {
     }
   } catch {}
 
+  const deletedKeys = getDeletedCustomerKeys();
   const map = new Map<string, any>();
-  // 1. Seed defaults first (guarantees ragavan is always present)
-  DEFAULT_CUSTOMERS.forEach((c) => {
+
+  // 1. Seed defaults first (excluding deleted)
+  DEFAULT_CUSTOMERS.filter((c) => !isCustomerDeleted(c, deletedKeys)).forEach((c) => {
     const key = (c.phone || c.id).replace(/\D/g, '') || c.id;
     map.set(key, { ...c });
   });
 
-  // 2. Merge stored customers
-  list.forEach((c) => {
+  // 2. Merge stored customers (excluding deleted)
+  list.filter((c) => !isCustomerDeleted(c, deletedKeys)).forEach((c) => {
     const key = (c.phone || c.id).replace(/\D/g, '') || c.id;
     map.set(key, { ...map.get(key), ...c });
   });
 
-  // 3. Merge registered users
+  // 3. Merge registered users (excluding deleted)
   const registered = getRegisteredUsers();
-  registered.forEach((u) => {
+  registered.filter((u) => !isCustomerDeleted(u, deletedKeys)).forEach((u) => {
     const key = (u.phone || u.id).replace(/\D/g, '') || u.id;
     if (!map.has(key)) {
       map.set(key, {
@@ -303,9 +338,20 @@ export function findCustomerAccount(rawIdentifier: string): any | null {
   const lower = cleanId.toLowerCase();
   const cleanPhone = cleanId.replace(/\D/g, '');
 
+  // If customer was explicitly deleted by Admin, reject immediately
+  const deletedKeys = getDeletedCustomerKeys();
+  if (
+    deletedKeys.has(cleanId) ||
+    deletedKeys.has(lower) ||
+    (cleanPhone && (deletedKeys.has(cleanPhone) || (cleanPhone.length >= 10 && deletedKeys.has(cleanPhone.slice(-10)))))
+  ) {
+    return null;
+  }
+
   // 1. Check Registered Customers (created via "Create Account")
   const registered = getRegisteredUsers();
   const foundInReg = registered.find((u) => {
+    if (isCustomerDeleted(u, deletedKeys)) return false;
     const uEmail = (u.email || '').toLowerCase();
     const uPhone = (u.phone || '').replace(/\D/g, '');
     return (
@@ -318,6 +364,7 @@ export function findCustomerAccount(rawIdentifier: string): any | null {
   // 2. Check Admin Customer Accounts
   const stored = getStoredCustomers();
   const foundInStored = stored.find((c) => {
+    if (isCustomerDeleted(c, deletedKeys)) return false;
     const cEmail = (c.email || '').toLowerCase();
     const cPhone = (c.phone || '').replace(/\D/g, '');
     return (
@@ -337,13 +384,26 @@ export function findCustomerAccount(rawIdentifier: string): any | null {
     };
   }
 
-  // 3. Check DEMO_USERS
-  const demo = DEMO_USERS[lower];
-  if (demo) return demo;
-  if (cleanPhone.length >= 10) {
-    const foundDemo = Object.values(DEMO_USERS).find((u) =>
-      (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10))
+  // 3. Check DEFAULT_CUSTOMERS
+  const foundInDefault = DEFAULT_CUSTOMERS.find((c) => {
+    if (isCustomerDeleted(c, deletedKeys)) return false;
+    const cEmail = (c.email || '').toLowerCase();
+    const cPhone = (c.phone || '').replace(/\D/g, '');
+    return (
+      (cEmail && cEmail === lower) ||
+      (cleanPhone.length >= 10 && cPhone.length >= 10 && cPhone.endsWith(cleanPhone.slice(-10)))
     );
+  });
+  if (foundInDefault) return foundInDefault;
+
+  // 4. Check DEMO_USERS
+  const demo = DEMO_USERS[lower];
+  if (demo && !isCustomerDeleted(demo, deletedKeys)) return demo;
+  if (cleanPhone.length >= 10) {
+    const foundDemo = Object.values(DEMO_USERS).find((u) => {
+      if (isCustomerDeleted(u, deletedKeys)) return false;
+      return (u.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10));
+    });
     if (foundDemo) return foundDemo;
   }
 
@@ -481,6 +541,15 @@ export const api = {
       // Also persist to admin customers list
       const stored = getStoredCustomers();
       saveStoredCustomers([newUser, ...stored.filter((c) => c.email !== email && (!cleanPhone || !c.phone.includes(cleanPhone.slice(-10))))]);
+
+      // If customer previously deleted re-registers, unblock their key
+      const deletedKeys = getDeletedCustomerKeys();
+      if (email) deletedKeys.delete(email);
+      if (cleanPhone) {
+        deletedKeys.delete(cleanPhone);
+        if (cleanPhone.length >= 10) deletedKeys.delete(cleanPhone.slice(-10));
+      }
+      saveDeletedCustomerKeys(deletedKeys);
 
       // Synchronize immediately to Supabase Cloud Database
       syncUserToSupabase(newUser, body.password).catch(() => {});
@@ -1383,6 +1452,70 @@ export const api = {
         id,
         isActive: updatedIsActive,
       };
+    }),
+
+  deleteAdminCustomer: (id: string) =>
+    callApi('/admin/customers/' + id, { method: 'DELETE' }, () => {
+      const stored = getStoredCustomers();
+      const target = stored.find((c) => c.id === id);
+
+      // 1. Blacklist keys so customer does not resurrect from cache or defaults
+      const deletedKeys = getDeletedCustomerKeys();
+      deletedKeys.add(id);
+      if (target?.email) deletedKeys.add(target.email.toLowerCase());
+      if (target?.phone) {
+        deletedKeys.add(target.phone);
+        const cp = target.phone.replace(/\D/g, '');
+        if (cp) {
+          deletedKeys.add(cp);
+          if (cp.length >= 10) deletedKeys.add(cp.slice(-10));
+        }
+      }
+      saveDeletedCustomerKeys(deletedKeys);
+
+      // 2. Remove from stored customers
+      const remainingStored = stored.filter((c) => c.id !== id);
+      saveStoredCustomers(remainingStored);
+
+      // 3. Remove from registered users list
+      const regUsers = getRegisteredUsers().filter(
+        (u) =>
+          u.id !== id &&
+          (!target?.email || u.email?.toLowerCase() !== target.email.toLowerCase()) &&
+          (!target?.phone || !u.phone?.replace(/\D/g, '').endsWith(target.phone.replace(/\D/g, '').slice(-10)))
+      );
+      saveRegisteredUsers(regUsers);
+
+      // 4. Delete from Supabase Cloud Database by ID
+      fetch(`${SUPABASE_URL}/rest/v1/Users?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      }).catch(() => {});
+
+      // 5. Also delete by email and phone in Supabase to be 100% clean
+      if (target?.email) {
+        fetch(`${SUPABASE_URL}/rest/v1/Users?email=eq.${encodeURIComponent(target.email)}`, {
+          method: 'DELETE',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+        }).catch(() => {});
+      }
+      if (target?.phone) {
+        fetch(`${SUPABASE_URL}/rest/v1/Users?phone=eq.${encodeURIComponent(target.phone)}`, {
+          method: 'DELETE',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+        }).catch(() => {});
+      }
+
+      return { success: true, id };
     }),
 
   getAdminCoupons: () =>
