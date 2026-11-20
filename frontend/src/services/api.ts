@@ -725,7 +725,7 @@ export const api = {
         try {
           const redirectUrl = typeof window !== 'undefined'
             ? `${window.location.origin}/login`
-            : 'https://meat-corner-s3ee.vercel.app/login';
+            : 'https://www.mpmmeatcorner.in/login';
 
           fetch('https://ajiovbilwinoiyjvzhcv.supabase.co/auth/v1/otp', {
             method: 'POST',
