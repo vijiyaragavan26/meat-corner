@@ -1106,6 +1106,8 @@ export const api = {
     callApi('/customer/addresses', {}, () => {
       let currentUserId = 'guest';
       try {
+        localStorage.removeItem('meat_corner_addresses');
+        localStorage.removeItem('meat_corner_user_addresses');
         const userRaw = localStorage.getItem('meat_corner_user');
         if (userRaw) {
           const u = JSON.parse(userRaw);
@@ -1115,7 +1117,14 @@ export const api = {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            return parsed;
+            // Strip out any legacy hardcoded Priya Dharshini mock address
+            const cleaned = parsed.filter(
+              (a: any) =>
+                a.id !== 'addr_1' &&
+                a.recipientName !== 'Priya Dharshini' &&
+                !(a.line1 || '').includes('Plot No 24')
+            );
+            return cleaned;
           }
         }
       } catch {}
