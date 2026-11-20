@@ -10,8 +10,8 @@ export const AdminSettingsPage: React.FC = () => {
 
   // Form states
   const [storeName, setStoreName] = useState('MEAT CORNER');
-  const [contactPhone, setContactPhone] = useState('+91 98765 43210');
-  const [contactEmail, setContactEmail] = useState('support@meatcorner.in');
+  const [contactPhone, setContactPhone] = useState('+91 93607 61595');
+  const [contactEmail, setContactEmail] = useState('mboopesh60@gmail.com');
   const [address, setAddress] = useState('');
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState<number>(30);
   const [freeDeliveryAbove, setFreeDeliveryAbove] = useState<number>(499);

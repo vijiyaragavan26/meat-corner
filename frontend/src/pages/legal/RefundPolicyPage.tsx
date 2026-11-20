@@ -114,7 +114,7 @@ export const RefundPolicyPage: React.FC = () => {
             <ol className="list-decimal list-inside space-y-2 text-gray-600 text-xs sm:text-sm">
               <li>Open your order details under <Link to="/account" className="text-brand-700 font-bold hover:underline">Order History</Link>.</li>
               <li>Provide your Order Number (e.g. <code>MC-20261119-XXXX</code>) and a brief description or photo of the issue.</li>
-              <li>You can contact us instantly via WhatsApp at <strong>+91 98765 43210</strong> or email <strong>support@meatcorner.in</strong>.</li>
+              <li>You can contact us instantly via WhatsApp at <strong>+91 93607 61595</strong> or email <strong>mboopesh60@gmail.com</strong>.</li>
             </ol>
           </section>
 
@@ -149,13 +149,13 @@ export const RefundPolicyPage: React.FC = () => {
               Our master butchery and support managers are available 7 days a week (6:00 AM – 10:00 PM):
             </p>
             <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
-              <a href="tel:+919876543210" className="inline-flex items-center space-x-1.5 font-bold text-brand-700 hover:underline">
+              <a href="tel:+919360761595" className="inline-flex items-center space-x-1.5 font-bold text-brand-700 hover:underline">
                 <Phone className="w-4 h-4" />
-                <span>+91 98765 43210</span>
+                <span>+91 93607 61595</span>
               </a>
-              <a href="mailto:support@meatcorner.in" className="inline-flex items-center space-x-1.5 font-bold text-brand-700 hover:underline">
+              <a href="mailto:mboopesh60@gmail.com" className="inline-flex items-center space-x-1.5 font-bold text-brand-700 hover:underline">
                 <Mail className="w-4 h-4" />
-                <span>support@meatcorner.in</span>
+                <span>mboopesh60@gmail.com</span>
               </a>
               <span className="inline-flex items-center space-x-1.5 text-gray-600">
                 <span>📍 115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116</span>

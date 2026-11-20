@@ -135,11 +135,11 @@ export const PrivacyPolicyPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
               <div className="flex items-center space-x-2 text-brand-900 font-medium">
                 <Mail className="w-4 h-4 text-brand-700 shrink-0" />
-                <span>support@meatcorner.in</span>
+                <a href="mailto:mboopesh60@gmail.com" className="hover:underline">mboopesh60@gmail.com</a>
               </div>
               <div className="flex items-center space-x-2 text-brand-900 font-medium">
                 <Phone className="w-4 h-4 text-brand-700 shrink-0" />
-                <span>+91 98765 43210</span>
+                <a href="tel:+919360761595" className="hover:underline">+91 93607 61595</a>
               </div>
               <div className="flex items-center space-x-2 text-brand-900 font-medium">
                 <MapPin className="w-4 h-4 text-brand-700 shrink-0" />

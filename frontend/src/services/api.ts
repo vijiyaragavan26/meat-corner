@@ -1566,8 +1566,8 @@ export const api = {
   getAdminSettings: () =>
     callApi('/admin/settings', {}, () => ({
       storeName: 'MEAT CORNER',
-      contactPhone: '+91 98765 43210',
-      contactEmail: 'support@meatcorner.in',
+      contactPhone: '+91 93607 61595',
+      contactEmail: 'mboopesh60@gmail.com',
       address: '115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116',
       freeDeliveryAbove: 499,
       baseDeliveryCharge: 30,

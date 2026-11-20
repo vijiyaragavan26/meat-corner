@@ -125,7 +125,7 @@ export const TermsPage: React.FC = () => {
           <section className="p-6 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
             <h3 className="font-bold text-sm text-charcoal">Questions About Our Terms?</h3>
             <p className="text-xs text-gray-500">
-              For any clarification regarding these terms, reach our support desk at <strong className="text-brand-700">support@meatcorner.in</strong> or call <strong className="text-brand-700">+91 98765 43210</strong>.
+              For any clarification regarding these terms, reach our support desk at <strong className="text-brand-700">mboopesh60@gmail.com</strong> or call <strong className="text-brand-700">+91 93607 61595</strong>.
             </p>
           </section>
         </div>
