@@ -215,11 +215,8 @@ export const AdminOrdersPage: React.FC = () => {
       {/* Page Title & Search Filter */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-charcoal flex items-center gap-2">
+          <h1 className="text-2xl font-black text-charcoal">
             Order Management & Fulfillment
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 animate-pulse">
-              ● Live Sync
-            </span>
           </h1>
           <p className="text-xs text-gray-500">Live order butchery queue, partner assignments, and customer deliveries</p>
         </div>
