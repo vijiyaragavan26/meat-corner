@@ -84,9 +84,9 @@ export const AdminOrdersPage: React.FC = () => {
         if (event.data?.type === 'ORDER_CREATED' && newOrd) {
           playOrderChime();
           setNewOrderAlert({
-            orderNumber: newOrd.orderNumber,
+            orderNumber: newOrd.orderNumber || newOrd.id,
             customerName: newOrd.customerName || newOrd.deliveryAddressSnapshot?.recipientName || 'Customer',
-            amount: newOrd.totalAmount
+            amount: newOrd.totalAmount || 0
           });
           setOrders((prev) => {
             if (prev.some((o) => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) {
@@ -94,6 +94,22 @@ export const AdminOrdersPage: React.FC = () => {
             }
             return [newOrd, ...prev];
           });
+        }
+        if (event.data?.type === 'ORDER_UPDATED') {
+          const { orderId, status: newStatus, deliveryPartnerId, deliveryPartner } = event.data;
+          setOrders((prev) =>
+            prev.map((o) => {
+              if (o.id === orderId || o.orderNumber === orderId) {
+                return {
+                  ...o,
+                  status: newStatus || o.status,
+                  deliveryPartnerId: deliveryPartnerId !== undefined ? deliveryPartnerId : o.deliveryPartnerId,
+                  deliveryPartnerName: deliveryPartner?.fullName || deliveryPartner?.name || o.deliveryPartnerName,
+                };
+              }
+              return o;
+            })
+          );
         }
       };
     } catch {}
@@ -103,9 +119,9 @@ export const AdminOrdersPage: React.FC = () => {
         const newOrd = e.detail;
         playOrderChime();
         setNewOrderAlert({
-          orderNumber: newOrd.orderNumber,
+          orderNumber: newOrd.orderNumber || newOrd.id,
           customerName: newOrd.customerName || newOrd.deliveryAddressSnapshot?.recipientName || 'Customer',
-          amount: newOrd.totalAmount
+          amount: newOrd.totalAmount || 0
         });
         setOrders((prev) => {
           if (prev.some((o) => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) {
@@ -127,23 +143,61 @@ export const AdminOrdersPage: React.FC = () => {
 
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
     setIsUpdating(true);
+    // 1. Optimistic Update: immediately update the order status in state so UI reacts instantly
+    setOrders((prev) =>
+      prev.map((o) =>
+        (o.id === orderId || o.orderNumber === orderId)
+          ? { ...o, status, updatedAt: new Date().toISOString() }
+          : o
+      )
+    );
+    if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+      setSelectedOrder((prev) => (prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null));
+    }
+
     try {
       const res = await api.updateAdminOrderStatus(orderId, {
         status,
         rejectionReason: reason,
         cancellationReason: reason
       });
-      if (res.success) {
-        const updatedOrder = (res.data?.order || res.data) as Order;
-        if (updatedOrder && updatedOrder.id) {
-          setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
-          if (selectedOrder?.id === orderId) {
-            setSelectedOrder(updatedOrder);
-          }
+      if (res.success && res.data) {
+        const updated = (res.data?.order || res.data) as any;
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id === orderId || o.orderNumber === orderId) {
+              return {
+                ...o,
+                ...updated,
+                status,
+                items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (Array.isArray(o.items) ? o.items : []),
+                orderNumber: updated?.orderNumber || o.orderNumber || '',
+                customerName: updated?.customerName || o.customerName || 'Customer',
+                customerPhone: updated?.customerPhone || o.customerPhone || '',
+                totalAmount: updated?.totalAmount ?? o.totalAmount ?? 0,
+                deliveryPartnerName: updated?.deliveryPartnerName || o.deliveryPartnerName,
+              };
+            }
+            return o;
+          })
+        );
+        if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+          setSelectedOrder((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  ...updated,
+                  status,
+                  items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (prev.items || []),
+                }
+              : null
+          );
         }
       }
     } catch (err: any) {
+      console.error('Status update failed:', err);
       alert(err.message || 'Status update failed');
+      await fetchOrders(true);
     } finally {
       setIsUpdating(false);
     }
@@ -154,22 +208,61 @@ export const AdminOrdersPage: React.FC = () => {
       alert('Please select an active delivery partner.');
       return;
     }
+    const partner = partners.find((p) => p.id === selectedPartnerId);
     setIsUpdating(true);
+
+    // Optimistically update partner name and status immediately
+    setOrders((prev) =>
+      prev.map((o) =>
+        (o.id === orderId || o.orderNumber === orderId)
+          ? {
+              ...o,
+              status: 'PARTNER_ASSIGNED' as OrderStatus,
+              deliveryPartnerId: selectedPartnerId,
+              deliveryPartnerName: partner?.fullName || o.deliveryPartnerName,
+            }
+          : o
+      )
+    );
+
     try {
       const res = await api.assignDeliveryPartner(orderId, selectedPartnerId);
-      if (res.success) {
-        const updatedOrder = (res.data?.order || res.data) as Order;
-        if (updatedOrder && updatedOrder.id) {
-          setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
-          if (selectedOrder?.id === orderId) {
-            setSelectedOrder(updatedOrder);
-          }
+      if (res.success && res.data) {
+        const updated = (res.data?.order || res.data) as any;
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id === orderId || o.orderNumber === orderId) {
+              return {
+                ...o,
+                ...updated,
+                status: 'PARTNER_ASSIGNED' as OrderStatus,
+                items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (Array.isArray(o.items) ? o.items : []),
+                orderNumber: updated?.orderNumber || o.orderNumber || '',
+                deliveryPartnerId: selectedPartnerId,
+                deliveryPartnerName: partner?.fullName || updated?.deliveryPartnerName || o.deliveryPartnerName,
+              };
+            }
+            return o;
+          })
+        );
+        if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+          setSelectedOrder((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  ...updated,
+                  status: 'PARTNER_ASSIGNED' as OrderStatus,
+                  deliveryPartnerId: selectedPartnerId,
+                  deliveryPartnerName: partner?.fullName || prev.deliveryPartnerName,
+                }
+              : null
+          );
         }
-        await fetchOrders(true);
         alert('Delivery partner assigned successfully!');
       }
     } catch (err: any) {
       alert(err.message || 'Failed to assign delivery partner');
+      await fetchOrders(true);
     } finally {
       setIsUpdating(false);
     }
@@ -305,13 +398,12 @@ export const AdminOrdersPage: React.FC = () => {
                 filteredOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50/80 transition">
                     {/* Order Details */}
-                    {/* Order Details */}
                     <td className="py-3.5 px-4">
-                      <span className="font-mono font-bold text-charcoal block">{order.orderNumber}</span>
+                      <span className="font-mono font-bold text-charcoal block">{order.orderNumber || order.id}</span>
                       <span className="text-[10px] text-gray-400">
                         {order.createdAt && !isNaN(new Date(order.createdAt).getTime())
                           ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : 'Recent'} • {order.deliverySlot}
+                          : 'Recent'} • {order.deliverySlot || 'Express (30-45 mins)'}
                       </span>
                     </td>
 
@@ -321,35 +413,37 @@ export const AdminOrdersPage: React.FC = () => {
                         {order.deliveryAddressSnapshot?.recipientName || order.customerName || 'Customer'}
                       </span>
                       <span className="text-[11px] text-gray-500 font-mono">
-                        {order.deliveryAddressSnapshot?.phone || order.customerPhone}
+                        {order.deliveryAddressSnapshot?.phone || order.customerPhone || ''}
                       </span>
                       <span className="text-[10px] text-gray-400 block truncate max-w-[140px]">
-                        {order.deliveryAddressSnapshot?.area}
+                        {order.deliveryAddressSnapshot?.area || ''}
                       </span>
                     </td>
 
                     {/* Items */}
                     <td className="py-3.5 px-4">
-                      <span className="font-bold text-charcoal">{order.items.length} items</span>
+                      <span className="font-bold text-charcoal">{Array.isArray(order.items) ? order.items.length : 0} items</span>
                       <div className="text-[10px] text-gray-500 truncate max-w-[160px]">
-                        {order.items.map((it) => it.productName).join(', ')}
+                        {Array.isArray(order.items) && order.items.length > 0
+                          ? order.items.map((it) => it?.productName || 'Chicken Cut').join(', ')
+                          : 'Chicken Order'}
                       </div>
                     </td>
 
                     {/* Payment */}
                     <td className="py-3.5 px-4">
-                      <span className="font-black text-brand-700 block text-sm">₹{order.totalAmount}</span>
+                      <span className="font-black text-brand-700 block text-sm">₹{order.totalAmount || 0}</span>
                       <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                        {order.paymentMethod} • {order.paymentStatus}
+                        {order.paymentMethod || 'COD'} • {order.paymentStatus || 'PENDING'}
                       </span>
                     </td>
 
                     {/* Status Direct Selector */}
                     <td className="py-3.5 px-4">
                       <select
-                        value={order.status}
+                        value={order.status || 'PLACED'}
                         disabled={isUpdating}
-                        onChange={(e) => handleStatusUpdate(order.id, e.target.value as OrderStatus)}
+                        onChange={(e) => handleStatusUpdate(order.id || order.orderNumber, e.target.value as OrderStatus)}
                         className={`text-[10px] font-bold px-2 py-1 rounded-xl uppercase tracking-wider outline-none border cursor-pointer shadow-sm transition ${
                           order.status === 'DELIVERED'
                             ? 'bg-green-100 text-green-900 border-green-300'
@@ -437,9 +531,9 @@ export const AdminOrdersPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Change Status:</span>
                   <select
-                    value={selectedOrder.status}
+                    value={selectedOrder.status || 'PLACED'}
                     disabled={isUpdating}
-                    onChange={(e) => handleStatusUpdate(selectedOrder.id, e.target.value as OrderStatus)}
+                    onChange={(e) => handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, e.target.value as OrderStatus)}
                     className="bg-white border border-gray-300 rounded-xl px-2.5 py-1 text-xs font-bold text-charcoal outline-none focus:border-brand-700 cursor-pointer shadow-sm"
                   >
                     <option value="PLACED">Placed</option>
@@ -557,8 +651,8 @@ export const AdminOrdersPage: React.FC = () => {
             <div>
               <h4 className="font-bold text-xs text-charcoal uppercase tracking-wider mb-2">Ordered Chicken Cuts</h4>
               <div className="divide-y divide-gray-100 bg-gray-50 rounded-2xl p-4">
-                {selectedOrder.items.map((it) => (
-                  <div key={it.id} className="py-2 flex justify-between items-center text-xs">
+                {(Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? selectedOrder.items : []).map((it) => (
+                  <div key={it.id || it.productName} className="py-2 flex justify-between items-center text-xs">
                     <div>
                       <h5 className="font-bold text-charcoal">{it.productName}</h5>
                       <p className="text-[11px] text-gray-500">

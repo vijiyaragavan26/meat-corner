@@ -2078,17 +2078,34 @@ export const api = {
 
   updateAdminOrderStatus: (id: string, body: any) =>
     callApi('/orders/admin/' + id + '/status', { method: 'PATCH', body: JSON.stringify(body) }, async () => {
-      await updateSupabaseOrderStatus(id, body.status, body);
+      const updatedSupa = await updateSupabaseOrderStatus(id, body.status, body);
 
       const orders = getLiveOrders();
       const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+      const now = new Date().toISOString();
       if (ord) {
         ord.status = body.status;
+        ord.updatedAt = now;
         saveLiveOrders(orders);
       }
 
       broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: body.status });
-      return ord || { id, status: body.status };
+
+      const finalOrder = {
+        ...(ord || {}),
+        ...(updatedSupa || {}),
+        id: ord?.id || updatedSupa?.id || id,
+        orderNumber: ord?.orderNumber || updatedSupa?.orderNumber || id,
+        status: body.status,
+        updatedAt: now,
+        items: ord?.items && Array.isArray(ord.items) && ord.items.length > 0
+          ? ord.items
+          : (Array.isArray(updatedSupa?.items) && updatedSupa.items.length > 0 ? updatedSupa.items : []),
+        deliveryPartnerName: ord?.deliveryPartnerName || updatedSupa?.deliveryPartnerName || null,
+        deliveryPartnerId: ord?.deliveryPartnerId || updatedSupa?.deliveryPartnerId || null,
+      };
+
+      return finalOrder;
     }),
 
   assignDeliveryPartner: (id: string, deliveryPartnerId: string) =>
