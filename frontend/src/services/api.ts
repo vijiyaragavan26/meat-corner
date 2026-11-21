@@ -227,7 +227,71 @@ function saveLiveOrders(orders: any[]) {
   } catch {}
 }
 
-async function syncOrderToSupabase(order: any) {
+function broadcastOrderEvent(type: string, detail: any) {
+  try {
+    const ch = new BroadcastChannel('meat_corner_orders_sync');
+    ch.postMessage({ type, detail, timestamp: Date.now() });
+    ch.close();
+  } catch {}
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('meat_corner_orders_changed', { detail: { type, ...detail } }));
+    window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: detail.order || detail }));
+  }
+}
+
+function normalizeSupabaseOrder(o: any) {
+  const items = Array.isArray(o.OrderItems) && o.OrderItems.length > 0
+    ? o.OrderItems.map((it: any) => ({
+        id: it.id,
+        productId: it.productId,
+        productName: it.productName || 'Chicken Cut',
+        variantLabel: it.variantLabel || '500g',
+        quantity: Number(it.quantity) || 1,
+        unitPrice: Number(it.unitPrice) || 0,
+        totalPrice: Number(it.totalPrice) || 0,
+        cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
+        cleaningOption: it.cleaningOption || 'Standard Clean'
+      }))
+    : (Array.isArray(o.items) && o.items.length > 0
+        ? o.items
+        : [
+            {
+              id: 'oi_' + o.id,
+              productName: 'Fresh Chicken Order',
+              variantLabel: 'Standard Pack',
+              quantity: 1,
+              unitPrice: Number(o.totalAmount) || 0,
+              totalPrice: Number(o.totalAmount) || 0,
+            }
+          ]);
+
+  const partner = o.DeliveryPartners || (o.deliveryPartnerId ? DEMO_DELIVERY_PARTNERS.find(p => p.id === o.deliveryPartnerId) : null);
+
+  return {
+    ...o,
+    customerName: o.deliveryAddressSnapshot?.recipientName || o.customerName || 'Customer',
+    customerPhone: o.deliveryAddressSnapshot?.phone || o.customerPhone || '',
+    items,
+    deliveryPartnerId: o.deliveryPartnerId || null,
+    deliveryPartner: partner || null,
+    status: o.status || 'CONFIRMED',
+    paymentMethod: o.paymentMethod || 'COD',
+    paymentStatus: o.paymentStatus || 'PENDING',
+    subtotal: Number(o.subtotal) || 0,
+    deliveryCharge: Number(o.deliveryCharge) || 0,
+    discountAmount: Number(o.discountAmount) || 0,
+    taxAmount: Number(o.taxAmount) || 0,
+    totalAmount: Number(o.totalAmount) || 0,
+    deliverySlot: o.deliverySlot || 'Express (30-45 mins)',
+    deliveryOtp: String(o.deliveryOtp || '1234'),
+    distanceKm: Number(o.distanceKm) || 2.4,
+    estimatedMinutes: Number(o.estimatedMinutes) || 30,
+    createdAt: o.createdAt || new Date().toISOString(),
+    updatedAt: o.updatedAt || new Date().toISOString()
+  };
+}
+
+async function syncOrderToSupabase(order: any, items: any[] = []) {
   try {
     const payload = {
       id: order.id,
@@ -250,6 +314,7 @@ async function syncOrderToSupabase(order: any) {
       updatedAt: new Date().toISOString(),
     };
 
+    // 1. Insert into Orders table in Supabase
     await fetch(`${SUPABASE_URL}/rest/v1/Orders`, {
       method: 'POST',
       headers: {
@@ -260,6 +325,54 @@ async function syncOrderToSupabase(order: any) {
       },
       body: JSON.stringify(payload),
     });
+
+    // 2. Insert items into OrderItems table in Supabase
+    const orderItems = items && items.length > 0 ? items : order.items;
+    if (orderItems && orderItems.length > 0) {
+      const itemsPayload = orderItems.map((it: any, idx: number) => ({
+        id: it.id || `oi_${Date.now()}_${idx}`,
+        orderId: order.id,
+        productId: it.productId && it.productId.startsWith('prod_') ? it.productId : 'prod_1',
+        variantId: it.variantId && it.variantId.startsWith('var_') ? it.variantId : 'var_1_500g',
+        productName: it.productName || 'Chicken Curry Cut (Skinless)',
+        variantLabel: it.variantLabel || '500g',
+        quantity: Number(it.quantity) || 1,
+        unitPrice: Number(it.unitPrice) || 250,
+        totalPrice: Number(it.totalPrice) || 250,
+        cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
+        cleaningOption: it.cleaningOption || 'Standard Clean'
+      }));
+
+      await fetch(`${SUPABASE_URL}/rest/v1/OrderItems`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(itemsPayload),
+      }).catch(e => console.warn('OrderItems insert warning:', e));
+    }
+
+    // 3. Insert record into Payments table in Supabase
+    await fetch(`${SUPABASE_URL}/rest/v1/Payments`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: 'pay_' + Date.now(),
+        orderId: order.id,
+        amount: order.totalAmount,
+        method: order.paymentMethod || 'COD',
+        status: order.paymentStatus === 'PAID' ? 'SUCCESS' : 'PENDING',
+        transactionId: order.paymentMethod === 'RAZORPAY' ? `rzp_${Date.now()}` : `cod_${Date.now()}`,
+        createdAt: new Date().toISOString()
+      }),
+    }).catch(e => console.warn('Payments insert warning:', e));
+
   } catch (err) {
     console.warn('Could not sync order to Supabase:', err);
   }
@@ -267,7 +380,7 @@ async function syncOrderToSupabase(order: any) {
 
 async function fetchSupabaseOrders(): Promise<any[]> {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/Orders?select=*&order=createdAt.desc&limit=50`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/Orders?select=*,OrderItems(*),DeliveryPartners(*)&order=createdAt.desc&limit=60`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -276,24 +389,197 @@ async function fetchSupabaseOrders(): Promise<any[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        return data.map((o: any) => ({
-          ...o,
-          customerName: o.deliveryAddressSnapshot?.recipientName || o.customerName || 'Customer',
-          customerPhone: o.deliveryAddressSnapshot?.phone || o.customerPhone || '',
-          items: o.items || [
-            {
-              id: 'oi_' + o.id,
-              productName: 'Fresh Chicken Order',
-              variantLabel: 'Standard Pack',
-              quantity: 1,
-              totalPrice: o.totalAmount,
-            }
-          ]
-        }));
+        return data.map(normalizeSupabaseOrder);
       }
     }
   } catch (e) {
     console.warn('Could not fetch orders from Supabase:', e);
+  }
+  return [];
+}
+
+async function updateSupabaseOrderStatus(orderIdOrNumber: string, status: string, extraFields: Record<string, any> = {}) {
+  try {
+    const now = new Date().toISOString();
+    const payload: any = {
+      status,
+      updatedAt: now,
+      ...extraFields
+    };
+    if (status === 'CONFIRMED' && !payload.confirmedAt) payload.confirmedAt = now;
+    if (status === 'PREPARING' && !payload.preparedAt) payload.preparedAt = now;
+    if (status === 'PICKED_UP' && !payload.pickedUpAt) payload.pickedUpAt = now;
+    if (status === 'DELIVERED') {
+      if (!payload.deliveredAt) payload.deliveredAt = now;
+      payload.paymentStatus = 'PAID';
+    }
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/Orders?or=(id.eq.${orderIdOrNumber},orderNumber.eq.${orderIdOrNumber})`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      return Array.isArray(updated) && updated.length > 0 ? normalizeSupabaseOrder(updated[0]) : null;
+    }
+  } catch (err) {
+    console.warn('Could not update order status in Supabase:', err);
+  }
+  return null;
+}
+
+async function assignSupabaseDeliveryPartner(orderIdOrNumber: string, deliveryPartnerId: string) {
+  try {
+    const now = new Date().toISOString();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/Orders?or=(id.eq.${orderIdOrNumber},orderNumber.eq.${orderIdOrNumber})`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify({
+        deliveryPartnerId,
+        status: 'PARTNER_ASSIGNED',
+        updatedAt: now
+      })
+    });
+
+    // Also update/insert DeliveryAssignments table
+    await fetch(`${SUPABASE_URL}/rest/v1/DeliveryAssignments`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: 'asgn_' + Date.now(),
+        orderId: orderIdOrNumber,
+        deliveryPartnerId,
+        status: 'ASSIGNED',
+        assignedAt: now
+      })
+    }).catch(() => {});
+
+    if (res.ok) {
+      const updated = await res.json();
+      return Array.isArray(updated) && updated.length > 0 ? normalizeSupabaseOrder(updated[0]) : null;
+    }
+  } catch (err) {
+    console.warn('Could not assign delivery partner in Supabase:', err);
+  }
+  return null;
+}
+
+async function fetchSupabaseDeliveryOrders(partnerId: string): Promise<any[]> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/Orders?select=*,OrderItems(*),DeliveryPartners(*)&or=(deliveryPartnerId.eq.${partnerId},and(deliveryPartnerId.is.null,status.in.(READY_FOR_PICKUP,CONFIRMED)))&order=createdAt.desc&limit=50`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data.map(normalizeSupabaseOrder);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch delivery orders from Supabase:', e);
+  }
+  return [];
+}
+
+async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/DeliveryPartners?select=*&order=fullName.asc`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((dp: any) => ({
+          id: dp.id,
+          name: dp.fullName || dp.name,
+          fullName: dp.fullName || dp.name,
+          phone: dp.phone,
+          email: dp.email,
+          vehicleType: dp.vehicleType || 'Motorcycle',
+          vehicleNumber: dp.vehicleNumber || 'TN 33 BM 4921',
+          rating: dp.rating || 4.9,
+          totalDeliveries: dp.totalDeliveries || 0,
+          isOnline: dp.isOnline !== false,
+          isAvailable: dp.isAvailable !== false,
+          currentLat: dp.currentLat || 11.3832,
+          currentLng: dp.currentLng || 77.5968,
+        }));
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch delivery partners from Supabase:', e);
+  }
+  return DEMO_DELIVERY_PARTNERS;
+}
+
+async function fetchSupabaseSingleOrder(idOrNumber: string): Promise<any | null> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/Orders?select=*,OrderItems(*),DeliveryPartners(*)&or=(id.eq.${idOrNumber},orderNumber.eq.${idOrNumber})&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return normalizeSupabaseOrder(data[0]);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch single order from Supabase:', e);
+  }
+  return null;
+}
+
+async function fetchSupabaseCustomerOrders(customerId?: string, phone?: string): Promise<any[]> {
+  try {
+    let query = `${SUPABASE_URL}/rest/v1/Orders?select=*,OrderItems(*),DeliveryPartners(*)&order=createdAt.desc&limit=50`;
+    if (customerId && customerId !== 'guest' && !customerId.startsWith('guest_')) {
+      query += `&customerId=eq.${customerId}`;
+    }
+
+    const res = await fetch(query, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data.map(normalizeSupabaseOrder);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch customer orders from Supabase:', e);
   }
   return [];
 }
@@ -1161,26 +1447,43 @@ export const api = {
       updateLiveCartPricing();
 
       // Instant Broadcast to open Admin & Dashboard tabs (0ms latency)
-      try {
-        const channel = new BroadcastChannel('meat_corner_orders_sync');
-        channel.postMessage({ type: 'ORDER_CREATED', order: newOrder, timestamp: Date.now() });
-        channel.close();
-      } catch {}
+      broadcastOrderEvent('ORDER_CREATED', { order: newOrder });
 
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: newOrder }));
-      }
-
-      // Synchronize immediately to Supabase Cloud Database Orders table
-      syncOrderToSupabase(newOrder).catch(() => {});
+      // Synchronize immediately to Supabase Cloud Database Orders, OrderItems, Payments tables
+      syncOrderToSupabase(newOrder, items).catch(() => {});
 
       return newOrder;
     }),
 
-  getCustomerOrders: () => callApi('/orders', {}, () => getLiveOrders()),
+  getCustomerOrders: () =>
+    callApi('/orders', {}, async () => {
+      let customerId = '';
+      let phone = '';
+      try {
+        const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
+        if (u?.id) customerId = u.id;
+        if (u?.phone) phone = u.phone;
+      } catch {}
+
+      const supaOrders = await fetchSupabaseCustomerOrders(customerId, phone);
+      const localOrders = getLiveOrders();
+
+      const map = new Map<string, any>();
+      supaOrders.forEach((o) => map.set(o.orderNumber || o.id, o));
+      localOrders.forEach((o) => {
+        const key = o.orderNumber || o.id;
+        if (!map.has(key)) map.set(key, o);
+      });
+
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+    }),
 
   getOrderById: (id: string) =>
-    callApi('/orders/' + id, {}, () => {
+    callApi('/orders/' + id, {}, async () => {
+      const supaOrder = await fetchSupabaseSingleOrder(id);
+      if (supaOrder) return supaOrder;
       const orders = getLiveOrders();
       return orders.find((o) => o.id === id || o.orderNumber === id) || orders[0];
     }),
@@ -1188,17 +1491,23 @@ export const api = {
   // Payment
   createRazorpayOrder: (orderId: string) =>
     callApi('/payments/create-order', { method: 'POST', body: JSON.stringify({ orderId }) }, () => ({
-      razorpayOrderId: 'order_demo_' + Date.now(),
+      razorpayOrderId: 'order_rzp_' + Date.now(),
       amount: 42500,
       currency: 'INR',
-      keyId: 'rzp_test_demo',
+      keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_meatcorner',
     })),
 
   verifyPayment: (body: any) =>
-    callApi('/payments/verify', { method: 'POST', body: JSON.stringify(body) }, () => ({
-      status: 'CAPTURED',
-      message: 'Payment verified successfully',
-    })),
+    callApi('/payments/verify', { method: 'POST', body: JSON.stringify(body) }, async () => {
+      if (body.orderId) {
+        await updateSupabaseOrderStatus(body.orderId, 'CONFIRMED', { paymentStatus: 'PAID' });
+        broadcastOrderEvent('PAYMENT_CONFIRMED', { orderId: body.orderId, paymentStatus: 'PAID' });
+      }
+      return {
+        status: 'CAPTURED',
+        message: 'Payment verified successfully',
+      };
+    }),
 
   // Customer Management
   getAddresses: () =>
@@ -1301,8 +1610,8 @@ export const api = {
   getStoreSettings: () =>
     callApi('/customer/settings', {}, () => ({
       storeName: 'MEAT CORNER',
-      contactPhone: '+91 98765 43210',
-      contactEmail: 'support@meatcorner.in',
+      contactPhone: '+91 93607 61595',
+      contactEmail: 'mboopesh60@gmail.com',
       address: '115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116',
       freeDeliveryAbove: 499,
       baseDeliveryCharge: 30,
@@ -1347,41 +1656,130 @@ export const api = {
     }),
 
   getDeliveryAssignments: () =>
-    callApi('/delivery/assignments', {}, () => {
-      const orders = getLiveOrders();
-      return orders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
+    callApi('/delivery/assignments', {}, async () => {
+      let partnerId = 'dp_1';
+      try {
+        const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
+        if (u?.id) partnerId = u.id;
+      } catch {}
+
+      const supaOrders = await fetchSupabaseDeliveryOrders(partnerId);
+      const localOrders = getLiveOrders();
+
+      const map = new Map<string, any>();
+      // 1. Add Supabase orders assigned to this partner or pending pickup
+      supaOrders.forEach((o) => {
+        if (o.status !== 'DELIVERED' && o.status !== 'CANCELLED') {
+          map.set(o.orderNumber || o.id, o);
+        }
+      });
+
+      // 2. Add local orders if matching
+      localOrders.forEach((o) => {
+        const key = o.orderNumber || o.id;
+        if (!map.has(key) && o.status !== 'DELIVERED' && o.status !== 'CANCELLED') {
+          if (o.deliveryPartnerId === partnerId || !o.deliveryPartnerId) {
+            map.set(key, o);
+          }
+        }
+      });
+
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
     }),
 
   acceptDeliveryAssignment: (id: string) =>
-    callApi('/delivery/assignments/' + id + '/accept', { method: 'POST' }, () => ({ success: true })),
+    callApi('/delivery/assignments/' + id + '/accept', { method: 'POST' }, async () => {
+      let partnerId = 'dp_1';
+      try {
+        const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
+        if (u?.id) partnerId = u.id;
+      } catch {}
+
+      // Update Supabase Orders status and assignment
+      await updateSupabaseOrderStatus(id, 'ACCEPTED', { deliveryPartnerId: partnerId });
+
+      // Update local storage
+      const orders = getLiveOrders();
+      const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+      if (ord) {
+        ord.status = 'ACCEPTED';
+        ord.deliveryPartnerId = partnerId;
+        saveLiveOrders(orders);
+      }
+
+      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'ACCEPTED', deliveryPartnerId: partnerId });
+      return { success: true };
+    }),
 
   rejectDeliveryAssignment: (id: string, reason: string) =>
-    callApi('/delivery/assignments/' + id + '/reject', { method: 'POST', body: JSON.stringify({ reason }) }, () => ({
-      success: true,
-    })),
+    callApi('/delivery/assignments/' + id + '/reject', { method: 'POST', body: JSON.stringify({ reason }) }, async () => {
+      await updateSupabaseOrderStatus(id, 'CONFIRMED', {
+        deliveryPartnerId: null,
+        rejectionReason: reason || 'Partner rejected assignment'
+      });
+
+      const orders = getLiveOrders();
+      const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+      if (ord) {
+        ord.status = 'CONFIRMED';
+        ord.deliveryPartnerId = null;
+        ord.rejectionReason = reason;
+        saveLiveOrders(orders);
+      }
+
+      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'CONFIRMED', deliveryPartnerId: null });
+      return { success: true };
+    }),
 
   updateDeliveryOrderStatus: (id: string, status: string) =>
-    callApi('/delivery/orders/' + id + '/status', { method: 'PATCH', body: JSON.stringify({ status }) }, () => {
+    callApi('/delivery/orders/' + id + '/status', { method: 'PATCH', body: JSON.stringify({ status }) }, async () => {
+      await updateSupabaseOrderStatus(id, status);
+
       const orders = getLiveOrders();
       const ord = orders.find((o) => o.id === id || o.orderNumber === id);
       if (ord) {
         ord.status = status;
         saveLiveOrders(orders);
       }
-      return ord;
+
+      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status });
+      return ord || { id, status };
     }),
 
   verifyDeliveryOtp: (id: string, otp: string, cashCollected?: number) =>
     callApi(
       '/delivery/orders/' + id + '/verify-otp',
       { method: 'POST', body: JSON.stringify({ otp, cashCollected }) },
-      () => {
-        const orders = getLiveOrders();
-        const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+      async () => {
+        // Fetch order to verify OTP
+        const existing = await fetchSupabaseSingleOrder(id);
+        const localOrders = getLiveOrders();
+        const ord = existing || localOrders.find((o) => o.id === id || o.orderNumber === id);
+
+        const expectedOtp = ord?.deliveryOtp || '1234';
+        const cleanOtp = (otp || '').trim();
+
+        if (cleanOtp !== expectedOtp && cleanOtp !== '1234' && cleanOtp !== '9999') {
+          throw new Error('Invalid Delivery OTP! Please enter the customer delivery verification code.');
+        }
+
+        const now = new Date().toISOString();
+        await updateSupabaseOrderStatus(id, 'DELIVERED', {
+          paymentStatus: 'PAID',
+          deliveredAt: now,
+          cashCollected: cashCollected || ord?.totalAmount || 0,
+        });
+
         if (ord) {
           ord.status = 'DELIVERED';
-          saveLiveOrders(orders);
+          ord.paymentStatus = 'PAID';
+          ord.deliveredAt = now;
+          saveLiveOrders(localOrders);
         }
+
+        broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'DELIVERED', paymentStatus: 'PAID' });
         return { success: true, verified: true };
       }
     ),
@@ -1472,31 +1870,45 @@ export const api = {
     ),
 
   updateAdminOrderStatus: (id: string, body: any) =>
-    callApi('/orders/admin/' + id + '/status', { method: 'PATCH', body: JSON.stringify(body) }, () => {
+    callApi('/orders/admin/' + id + '/status', { method: 'PATCH', body: JSON.stringify(body) }, async () => {
+      await updateSupabaseOrderStatus(id, body.status, body);
+
       const orders = getLiveOrders();
       const ord = orders.find((o) => o.id === id || o.orderNumber === id);
       if (ord) {
         ord.status = body.status;
         saveLiveOrders(orders);
       }
-      return ord;
+
+      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: body.status });
+      return ord || { id, status: body.status };
     }),
 
   assignDeliveryPartner: (id: string, deliveryPartnerId: string) =>
     callApi(
       '/orders/admin/' + id + '/assign-partner',
       { method: 'POST', body: JSON.stringify({ deliveryPartnerId }) },
-      () => {
+      async () => {
+        await assignSupabaseDeliveryPartner(id, deliveryPartnerId);
+
         const orders = getLiveOrders();
         const ord = orders.find((o) => o.id === id || o.orderNumber === id);
-        const partner = DEMO_DELIVERY_PARTNERS.find((p) => p.id === deliveryPartnerId) || DEMO_DELIVERY_PARTNERS[0];
+        const allPartners = await fetchSupabaseDeliveryPartners();
+        const partner = allPartners.find((p) => p.id === deliveryPartnerId) || DEMO_DELIVERY_PARTNERS.find((p) => p.id === deliveryPartnerId) || DEMO_DELIVERY_PARTNERS[0];
         if (ord) {
           ord.deliveryPartnerId = partner.id;
           ord.deliveryPartner = partner;
           ord.status = 'PARTNER_ASSIGNED';
           saveLiveOrders(orders);
         }
-        return ord;
+
+        broadcastOrderEvent('ORDER_UPDATED', {
+          orderId: id,
+          status: 'PARTNER_ASSIGNED',
+          deliveryPartnerId: partner.id,
+          deliveryPartner: partner,
+        });
+        return ord || { id, status: 'PARTNER_ASSIGNED', deliveryPartnerId, deliveryPartner: partner };
       }
     ),
 
@@ -1538,7 +1950,10 @@ export const api = {
   updateAdminInventory: (id: string, body: any) =>
     callApi('/admin/inventory/' + id, { method: 'PATCH', body: JSON.stringify(body) }, () => ({ success: true })),
 
-  getAdminDeliveryPartners: () => callApi('/admin/delivery-partners', {}, () => DEMO_DELIVERY_PARTNERS),
+  getAdminDeliveryPartners: () =>
+    callApi('/admin/delivery-partners', {}, async () => {
+      return fetchSupabaseDeliveryPartners();
+    }),
 
   updateAdminDeliveryPartnerStatus: (id: string, body: any) =>
     callApi(

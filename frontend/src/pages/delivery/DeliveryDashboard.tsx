@@ -87,6 +87,26 @@ export const DeliveryDashboard: React.FC = () => {
       return;
     }
     fetchData();
+
+    // Auto-polling every 4 seconds to immediately detect new Admin order assignments
+    const pollInterval = setInterval(() => {
+      fetchData();
+    }, 4000);
+
+    // Instant zero-latency cross-tab notification
+    const onSync = () => {
+      fetchData();
+    };
+    window.addEventListener('meat_corner_order_event', onSync);
+    window.addEventListener('meat_corner_order_placed', onSync);
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('meat_corner_orders_sync');
+      channel.onmessage = () => {
+        fetchData();
+      };
+    } catch {}
+
     // Simulate real-time GPS coordinate transmission every 10s if online
     const gpsInterval = setInterval(() => {
       if (partner?.isOnline) {
@@ -98,7 +118,13 @@ export const DeliveryDashboard: React.FC = () => {
       }
     }, 10000);
 
-    return () => clearInterval(gpsInterval);
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(gpsInterval);
+      if (channel) channel.close();
+      window.removeEventListener('meat_corner_order_event', onSync);
+      window.removeEventListener('meat_corner_order_placed', onSync);
+    };
   }, []);
 
   const handleToggleOnline = async () => {

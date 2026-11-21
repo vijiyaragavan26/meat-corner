@@ -47,6 +47,12 @@ export const AccountPage: React.FC = () => {
   const [newPin, setNewPin] = useState('638116');
   const [newLabel, setNewLabel] = useState('Home');
 
+  const refreshOrders = () => {
+    api.getCustomerOrders().then((res) => {
+      if (res.success) setOrders(res.data);
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -64,6 +70,29 @@ export const AccountPage: React.FC = () => {
         if (tktRes.success) setTickets(tktRes.data);
       })
       .finally(() => setLoading(false));
+
+    // Fast polling every 5s for order status sync
+    const interval = setInterval(refreshOrders, 5000);
+
+    const onSync = () => {
+      refreshOrders();
+    };
+    window.addEventListener('meat_corner_order_event', onSync);
+    window.addEventListener('meat_corner_order_placed', onSync);
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('meat_corner_orders_sync');
+      channel.onmessage = () => {
+        refreshOrders();
+      };
+    } catch {}
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener('meat_corner_order_event', onSync);
+      window.removeEventListener('meat_corner_order_placed', onSync);
+    };
   }, [user]);
 
   const handleReorder = (order: Order) => {

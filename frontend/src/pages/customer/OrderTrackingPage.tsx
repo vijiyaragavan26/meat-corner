@@ -49,9 +49,26 @@ export const OrderTrackingPage: React.FC = () => {
 
   useEffect(() => {
     fetchOrder();
-    // Auto polling for live tracking updates
-    const interval = setInterval(fetchOrder, 6000);
-    return () => clearInterval(interval);
+    // Auto polling every 4 seconds for live tracking updates
+    const interval = setInterval(fetchOrder, 4000);
+
+    const onSync = () => {
+      fetchOrder();
+    };
+    window.addEventListener('meat_corner_order_event', onSync);
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('meat_corner_orders_sync');
+      channel.onmessage = () => {
+        fetchOrder();
+      };
+    } catch {}
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener('meat_corner_order_event', onSync);
+    };
   }, [id]);
 
   if (loading) {
