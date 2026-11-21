@@ -2050,11 +2050,18 @@ export const api = {
           orderMap.set(key, o);
         });
 
-        // 2. Local orders (covers newly placed or in-memory orders)
-        localOrders.forEach((o) => {
-          const key = o.orderNumber || o.id;
+        // 2. Local orders (covers newly placed or recently updated in-memory orders)
+        localOrders.forEach((localOrd) => {
+          const key = localOrd.orderNumber || localOrd.id;
           if (!orderMap.has(key)) {
-            orderMap.set(key, o);
+            orderMap.set(key, localOrd);
+          } else {
+            const supaOrd = orderMap.get(key);
+            const localTime = new Date(localOrd.updatedAt || localOrd.createdAt || 0).getTime();
+            const supaTime = new Date(supaOrd.updatedAt || supaOrd.createdAt || 0).getTime();
+            if (localTime > supaTime) {
+              orderMap.set(key, { ...supaOrd, ...localOrd });
+            }
           }
         });
 
@@ -2098,7 +2105,9 @@ export const api = {
         if (ord) {
           ord.deliveryPartnerId = partner.id;
           ord.deliveryPartner = partner;
+          ord.deliveryPartnerName = partner.fullName || partner.name;
           ord.status = 'PARTNER_ASSIGNED';
+          ord.updatedAt = new Date().toISOString();
           saveLiveOrders(orders);
         }
 
