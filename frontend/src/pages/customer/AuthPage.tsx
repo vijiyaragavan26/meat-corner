@@ -334,7 +334,7 @@ export const AuthPage: React.FC = () => {
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. +91 93607 61595 or mboopesh60@gmail.com"
+                      placeholder="Enter your 10-digit mobile number or email"
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
                     />
                     <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />

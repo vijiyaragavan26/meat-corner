@@ -148,21 +148,7 @@ export const AdminLoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            disabled={lockoutTimer > 0}
-            onClick={() => {
-              setIdentifier('7604906429');
-              setPassword('Vijay@123');
-            }}
-            className="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition disabled:opacity-50"
-          >
-            Fill Admin: 7604906429 / Vijay@123
-          </button>
-        </div>
-
-        <div className="text-center">
+        <div className="text-center pt-2">
           <button
             onClick={() => navigate('/')}
             className="text-xs text-gray-500 hover:text-brand-700 font-semibold"

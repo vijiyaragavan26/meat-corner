@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bike, ShieldCheck, CheckCircle2, XCircle, Star, Phone, MapPin, Edit3, X } from 'lucide-react';
+import { Bike, ShieldCheck, CheckCircle2, XCircle, Star, Phone, MapPin, Edit3, X, UserPlus, Plus } from 'lucide-react';
 import { api } from '../../services/api';
 import { DeliveryPartner } from '../../types';
 
@@ -9,6 +9,23 @@ export const AdminDeliveryPartnersPage: React.FC = () => {
   const [editingPartner, setEditingPartner] = useState<DeliveryPartner | null>(null);
   const [commissionRate, setCommissionRate] = useState<number>(40);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Add Delivery Partner Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    password: '',
+    vehicleType: 'Motorcycle',
+    vehicleNumber: '',
+    drivingLicenseNo: '',
+    address: 'Perundurai, Erode',
+    commissionRate: 40,
+  });
 
   const fetchPartners = async () => {
     setLoading(true);
@@ -54,15 +71,67 @@ export const AdminDeliveryPartnersPage: React.FC = () => {
     }
   };
 
+  const handleAddPartnerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      const res = await (api as any).createAdminDeliveryPartner(formData);
+      if (res.success && res.data) {
+        setPartners((prev) => [res.data, ...prev]);
+        setSuccessMessage(`Delivery Partner "${res.data.fullName}" successfully added and activated!`);
+        setShowAddModal(false);
+        setFormData({
+          fullName: '',
+          phone: '',
+          email: '',
+          password: '',
+          vehicleType: 'Motorcycle',
+          vehicleNumber: '',
+          drivingLicenseNo: '',
+          address: 'Perundurai, Erode',
+          commissionRate: 40,
+        });
+        setTimeout(() => setSuccessMessage(null), 5000);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to add delivery partner');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black text-charcoal">Delivery Partner Roster & Fleets</h1>
-        <p className="text-xs text-gray-500">
-          Verify driver licenses, manage active riders, review ratings, and configure delivery earnings
-        </p>
+      {/* Header with Add Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-charcoal">Delivery Partner Roster & Fleets</h1>
+          <p className="text-xs text-gray-500">
+            Verify driver licenses, manage active riders, review ratings, and configure delivery earnings
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center space-x-2 bg-brand-700 hover:bg-brand-800 text-white font-bold px-4 py-2.5 rounded-2xl text-xs uppercase transition shadow-md hover:shadow-lg w-max cursor-pointer"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>Add Delivery Partner</span>
+        </button>
       </div>
+
+      {/* Success Notification Banner */}
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+          <button onClick={() => setSuccessMessage(null)} className="text-emerald-600 hover:text-emerald-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Partners Table */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
@@ -159,7 +228,7 @@ export const AdminDeliveryPartnersPage: React.FC = () => {
                           setEditingPartner(partner);
                           setCommissionRate(partner.commissionRate);
                         }}
-                        className="bg-gray-100 hover:bg-gray-200 text-charcoal font-bold text-[11px] px-2.5 py-1 rounded-lg transition"
+                        className="bg-gray-100 hover:bg-gray-200 text-charcoal font-bold text-[11px] px-2.5 py-1 rounded-lg transition cursor-pointer"
                       >
                         Fee
                       </button>
@@ -172,13 +241,200 @@ export const AdminDeliveryPartnersPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Add New Delivery Partner Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl relative border border-gray-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => {
+                setShowAddModal(false);
+                setErrorMessage(null);
+              }}
+              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-700 flex items-center justify-center font-bold">
+                <Bike className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-charcoal">Add New Delivery Partner</h3>
+                <p className="text-xs text-gray-500">Register and authorize a new delivery rider</p>
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-xl text-xs font-semibold">
+                {errorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleAddPartnerSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Poopesh M"
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="e.g. 9360761595"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="e.g. rider@meatcorner.in"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Rider App Password *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="e.g. Poopesh@123"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Vehicle Type *
+                  </label>
+                  <select
+                    value={formData.vehicleType}
+                    onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700 cursor-pointer"
+                  >
+                    <option value="Motorcycle">Motorcycle</option>
+                    <option value="Scooter">Scooter</option>
+                    <option value="Electric Bike">Electric Bike</option>
+                    <option value="Bicycle">Bicycle</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Vehicle Reg Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. TN 33 BM 4921"
+                    value={formData.vehicleNumber}
+                    onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700 uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Driving License No *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. TN33-2022-004921"
+                    value={formData.drivingLicenseNo}
+                    onChange={(e) => setFormData({ ...formData, drivingLicenseNo: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700 uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                    Base Fee / Delivery (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={10}
+                    value={formData.commissionRate}
+                    onChange={(e) => setFormData({ ...formData, commissionRate: Number(e.target.value) })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">
+                  Operational Area / Address
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Perundurai Road, Erode"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-700"
+                />
+              </div>
+
+              <div className="flex items-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="w-1/2 py-2.5 border border-gray-200 text-gray-600 font-bold rounded-xl text-xs hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-1/2 bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs uppercase transition shadow cursor-pointer flex items-center justify-center space-x-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Adding...' : 'Add Partner'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Edit Commission Modal */}
       {editingPartner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl relative border border-gray-100 space-y-4">
             <button
               onClick={() => setEditingPartner(null)}
-              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400"
+              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -206,7 +462,7 @@ export const AdminDeliveryPartnersPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isUpdating}
-                className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-xs uppercase transition shadow"
+                className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-xs uppercase transition shadow cursor-pointer"
               >
                 {isUpdating ? 'Updating...' : 'Update Earning Rate'}
               </button>

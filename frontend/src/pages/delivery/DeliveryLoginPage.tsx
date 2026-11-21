@@ -146,21 +146,7 @@ export const DeliveryLoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            disabled={lockoutTimer > 0}
-            onClick={() => {
-              setIdentifier('9360761595');
-              setPassword('Poopesh@123');
-            }}
-            className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-bold transition disabled:opacity-50"
-          >
-            Fill Rider: 9360761595 / Poopesh@123
-          </button>
-        </div>
-
-        <div className="text-center">
+        <div className="text-center pt-2">
           <Link to="/" className="text-xs text-gray-500 hover:text-emerald-700 font-semibold">
             ← Back to Meat Corner Customer Portal
           </Link>

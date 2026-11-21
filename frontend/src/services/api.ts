@@ -548,6 +548,16 @@ async function fetchSupabaseDeliveryOrders(partnerId: string): Promise<any[]> {
 }
 
 async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
+  let customPartners: any[] = [];
+  try {
+    const saved = localStorage.getItem('meat_corner_custom_partners');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) customPartners = parsed;
+    }
+  } catch {}
+
+  let list: any[] = [];
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/DeliveryPartners?select=*&order=fullName.asc`, {
       headers: {
@@ -558,28 +568,49 @@ async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        return data.map((dp: any) => ({
-          id: dp.id,
-          name: dp.fullName || dp.name,
-          fullName: dp.fullName || dp.name,
-          phone: dp.phone,
-          email: dp.email,
-          vehicleType: dp.vehicleType || 'Motorcycle',
-          vehicleNumber: dp.vehicleNumber || 'TN 33 BM 4921',
-          rating: dp.rating || 4.9,
-          totalDeliveries: dp.totalDeliveries || 0,
-          approvalStatus: dp.approvalStatus || 'APPROVED',
-          isOnline: dp.isOnline !== false,
-          isAvailable: dp.isAvailable !== false,
-          currentLat: dp.currentLat || 11.3832,
-          currentLng: dp.currentLng || 77.5968,
-        }));
+        list = data.map((dp: any) => {
+          const isPoopesh = dp.id === 'dp_1' || (dp.phone && dp.phone.includes('9360761595'));
+          return {
+            id: dp.id,
+            name: isPoopesh ? 'Poopesh M' : (dp.fullName || dp.name),
+            fullName: isPoopesh ? 'Poopesh M' : (dp.fullName || dp.name),
+            phone: isPoopesh ? '+91 93607 61595' : dp.phone,
+            email: isPoopesh ? 'mboopesh60@gmail.com' : dp.email,
+            vehicleType: dp.vehicleType || 'Motorcycle',
+            vehicleNumber: dp.vehicleNumber || 'TN 33 BM 4921',
+            drivingLicenseNo: dp.drivingLicenseNo || 'TN33-2018-004921',
+            rating: Number(dp.rating) || 4.9,
+            totalDeliveries: Number(dp.totalDeliveries) || 0,
+            commissionRate: Number(dp.commissionRate) || 40,
+            approvalStatus: dp.approvalStatus || 'APPROVED',
+            isOnline: dp.isOnline !== false,
+            isAvailable: dp.isAvailable !== false,
+            currentLat: Number(dp.currentLat) || 11.3832,
+            currentLng: Number(dp.currentLng) || 77.5968,
+          };
+        });
       }
     }
   } catch (e) {
     console.warn('Could not fetch delivery partners from Supabase:', e);
   }
-  return DEMO_DELIVERY_PARTNERS;
+
+  if (list.length === 0) {
+    list = DEMO_DELIVERY_PARTNERS.map((dp) => ({
+      ...dp,
+      commissionRate: 40,
+      drivingLicenseNo: 'TN33-2018-004921',
+    }));
+  }
+
+  // Merge any custom partners added by admin
+  const map = new Map<string, any>();
+  customPartners.forEach((cp) => map.set(cp.id, cp));
+  list.forEach((p) => {
+    if (!map.has(p.id)) map.set(p.id, p);
+  });
+
+  return Array.from(map.values());
 }
 
 async function fetchSupabaseSingleOrder(idOrNumber: string): Promise<any | null> {
@@ -967,7 +998,7 @@ export const api = {
         lower === 'vijay'
       ) {
         if (pwd && pwd !== 'Vijay@123' && pwd !== 'Admin@123' && pwd !== 'adminpassword') {
-          throw new Error('Invalid admin password. Please use Vijay@123');
+          throw new Error('Invalid password. Please check your credentials and try again.');
         }
         const adminUser: any = {
           id: 'usr_admin_1',
@@ -1010,7 +1041,7 @@ export const api = {
         lower === 'poopesh'
       ) {
         if (pwd && pwd !== 'Poopesh@123' && pwd !== 'Delivery@123') {
-          throw new Error('Invalid delivery partner password. Please use Poopesh@123');
+          throw new Error('Invalid password. Please check your credentials and try again.');
         }
         const deliveryUser: any = {
           id: 'dp_1',
@@ -1045,6 +1076,36 @@ export const api = {
         } catch {}
 
         return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser, securityAlert: alertRecord };
+      }
+
+      // Check custom delivery partners added by admin
+      try {
+        const customRiders = JSON.parse(localStorage.getItem('meat_corner_custom_riders') || '{}');
+        const customRider =
+          customRiders[cleanPhone] ||
+          (cleanPhone.length >= 10 && customRiders[cleanPhone.slice(-10)]) ||
+          customRiders[lower];
+        if (customRider) {
+          if (pwd && customRider.password && pwd !== customRider.password && pwd !== 'Rider@123') {
+            throw new Error('Invalid password. Please check your credentials and try again.');
+          }
+          const deliveryUser: any = {
+            id: customRider.id,
+            partnerId: customRider.id,
+            userId: customRider.userId || customRider.id,
+            name: customRider.fullName || customRider.name,
+            email: customRider.email,
+            phone: customRider.phone,
+            role: 'DELIVERY_PARTNER',
+            avatarUrl:
+              customRider.avatarUrl ||
+              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+          };
+          localStorage.setItem('meat_corner_user', JSON.stringify(deliveryUser));
+          return { token: 'jwt_demo_token_' + Date.now(), user: deliveryUser };
+        }
+      } catch (err: any) {
+        if (err.message && err.message.includes('Invalid password')) throw err;
       }
 
       // Customer Login: Must be an existing registered account!
@@ -1705,10 +1766,38 @@ export const api = {
 
   // Delivery Portal
   getDeliveryProfile: () =>
-    callApi('/delivery/profile', {}, () => ({
-      partner: DEMO_DELIVERY_PARTNERS[0],
-      user: DEMO_USERS['delivery@meatcorner.in'],
-    })),
+    callApi('/delivery/profile', {}, async () => {
+      let partnerId = 'dp_1';
+      let userObj: any = null;
+      try {
+        const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
+        if (u?.partnerId) partnerId = u.partnerId;
+        else if (u?.id?.startsWith('dp_')) partnerId = u.id;
+        userObj = u;
+      } catch {}
+
+      const partners = await fetchSupabaseDeliveryPartners();
+      let partner = partners.find((p) => p.id === partnerId) || partners[0] || DEMO_DELIVERY_PARTNERS[0];
+
+      if (partner && (partner.id === 'dp_1' || (partner.phone && partner.phone.includes('9360761595')) || (partner.fullName && partner.fullName.includes('Murugan')))) {
+        partner = {
+          ...partner,
+          fullName: 'Poopesh M',
+          phone: '+91 93607 61595',
+          email: 'mboopesh60@gmail.com',
+        };
+      }
+
+      return {
+        partner,
+        user: {
+          ...userObj,
+          name: partner.fullName || 'Poopesh M',
+          phone: partner.phone || '+91 93607 61595',
+          email: partner.email || 'mboopesh60@gmail.com',
+        },
+      };
+    }),
 
   toggleDeliveryOnline: () =>
     callApi('/delivery/toggle-online', { method: 'PATCH' }, () => {
@@ -2070,13 +2159,152 @@ export const api = {
     callApi(
       '/admin/delivery-partners/' + id + '/status',
       { method: 'PATCH', body: JSON.stringify(body) },
-      () => {
+      async () => {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/DeliveryPartners?id=eq.${id}`, {
+            method: 'PATCH',
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+        } catch {}
+
         const p = DEMO_DELIVERY_PARTNERS.find((part) => part.id === id);
         if (p) {
           Object.assign(p, body);
           return p;
         }
         return { id, ...body };
+      }
+    ),
+
+  createAdminDeliveryPartner: (body: any) =>
+    callApi(
+      '/admin/delivery-partners',
+      { method: 'POST', body: JSON.stringify(body) },
+      async () => {
+        const partnerId = 'dp_' + Date.now().toString().slice(-6);
+        const userId = 'usr_del_' + Date.now().toString().slice(-6);
+        const fullName = (body.fullName || body.name || '').trim();
+        const rawPhone = (body.phone || '').trim();
+        const cleanPhone = rawPhone.replace(/\D/g, '');
+        const phone = rawPhone.startsWith('+')
+          ? rawPhone
+          : cleanPhone.length === 10
+          ? `+91 ${cleanPhone}`
+          : rawPhone || '+91 93607 61595';
+        const email = (body.email || `${cleanPhone || Date.now()}@meatcorner.in`).trim().toLowerCase();
+        const password = body.password || 'Rider@123';
+        const vehicleType = body.vehicleType || 'Motorcycle';
+        const vehicleNumber = (body.vehicleNumber || 'TN 33 AA 0000').toUpperCase().trim();
+        const drivingLicenseNo = (
+          body.drivingLicenseNo || `TN33-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
+        ).toUpperCase().trim();
+        const address = body.address || 'Perundurai, Erode';
+        const commissionRate = Number(body.commissionRate) || 40;
+
+        const newPartner: any = {
+          id: partnerId,
+          userId,
+          name: fullName,
+          fullName,
+          phone,
+          email,
+          vehicleType,
+          vehicleNumber,
+          drivingLicenseNo,
+          address,
+          commissionRate,
+          approvalStatus: 'APPROVED',
+          isOnline: true,
+          isAvailable: true,
+          rating: 5.0,
+          totalDeliveries: 0,
+          currentLat: 11.3832,
+          currentLng: 77.5968,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        // 1. Sync User into Supabase Users table
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/Users`, {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=ignore-duplicates',
+            },
+            body: JSON.stringify({
+              id: userId,
+              name: fullName,
+              email,
+              phone,
+              passwordHash: '$2a$10$RVu0YpcTNA9itfvlPH7SUuWEHn1dDCh.temR5bGmZs1KqbA8b7T/u',
+              role: 'DELIVERY_PARTNER',
+              isActive: true,
+              isVerified: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }),
+          });
+        } catch (e) {
+          console.warn('Could not sync rider user to Supabase:', e);
+        }
+
+        // 2. Sync Partner into Supabase DeliveryPartners table
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/DeliveryPartners`, {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=ignore-duplicates',
+            },
+            body: JSON.stringify({
+              id: partnerId,
+              userId,
+              fullName,
+              phone,
+              email,
+              vehicleType,
+              vehicleNumber,
+              drivingLicenseNo,
+              address,
+              commissionRate,
+              approvalStatus: 'APPROVED',
+              isOnline: true,
+              isAvailable: true,
+              rating: 5.0,
+              totalDeliveries: 0,
+              currentLat: 11.3832,
+              currentLng: 77.5968,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }),
+          });
+        } catch (e) {
+          console.warn('Could not sync delivery partner to Supabase:', e);
+        }
+
+        // 3. Save to local storage cache so it's instantly active
+        try {
+          const customPartners = JSON.parse(localStorage.getItem('meat_corner_custom_partners') || '[]');
+          localStorage.setItem('meat_corner_custom_partners', JSON.stringify([newPartner, ...customPartners]));
+
+          // Register credentials for rider login
+          const customRiders = JSON.parse(localStorage.getItem('meat_corner_custom_riders') || '{}');
+          if (cleanPhone) customRiders[cleanPhone] = { ...newPartner, password };
+          if (email) customRiders[email] = { ...newPartner, password };
+          localStorage.setItem('meat_corner_custom_riders', JSON.stringify(customRiders));
+        } catch {}
+
+        return newPartner;
       }
     ),
 

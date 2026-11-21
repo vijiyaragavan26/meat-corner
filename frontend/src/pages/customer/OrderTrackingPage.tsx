@@ -220,7 +220,7 @@ export const OrderTrackingPage: React.FC = () => {
           customerAddress={`${order.deliveryAddressSnapshot.line1}, ${order.deliveryAddressSnapshot.area}`}
           riderLat={order.partnerLocation?.lat}
           riderLng={order.partnerLocation?.lng}
-          riderName={order.deliveryPartnerName || 'Murugan K'}
+          riderName={order.deliveryPartnerName || 'Poopesh M'}
           orderStatus={order.status}
         />
       </div>
@@ -236,7 +236,7 @@ export const OrderTrackingPage: React.FC = () => {
               <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">
                 Assigned Delivery Partner
               </span>
-              <h4 className="font-black text-base text-charcoal">{order.deliveryPartnerName || 'Murugan K'}</h4>
+              <h4 className="font-black text-base text-charcoal">{order.deliveryPartnerName || 'Poopesh M'}</h4>
               <p className="text-xs text-gray-500">Verified Meat Corner Rider • 4.9 ★ Rating</p>
             </div>
           </div>

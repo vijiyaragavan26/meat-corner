@@ -360,7 +360,7 @@ export const DEMO_ORDERS: any[] = [
     deliveryPartnerId: 'dp_1',
     deliveryPartner: {
       id: 'dp_1',
-      fullName: 'Murugan K',
+      fullName: 'Poopesh M',
       phone: '+919876543201',
       vehicleType: 'Motorcycle',
       vehicleNumber: 'TN 33 BM 4921'
