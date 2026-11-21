@@ -28,12 +28,33 @@ export const AdminDashboard: React.FC = () => {
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [testSent, setTestSent] = useState(false);
 
-  useEffect(() => {
+  const fetchDashboardData = () => {
     api.getAdminDashboard()
       .then((res) => {
         if (res.success) setStats(res.data);
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+
+    // Auto-poll dashboard stats every 5 seconds
+    const interval = setInterval(fetchDashboardData, 5000);
+
+    // Instant update on new order broadcast
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('meat_corner_orders_sync');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'ORDER_CREATED') {
+          fetchDashboardData();
+        }
+      };
+    } catch {}
+
+    const handleWindowOrder = () => fetchDashboardData();
+    window.addEventListener('meat_corner_order_placed', handleWindowOrder);
 
     // Load admin security alerts
     api.getAdminSecurityAlerts()
@@ -62,6 +83,12 @@ export const AdminDashboard: React.FC = () => {
         }
       })
       .catch(() => {});
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener('meat_corner_order_placed', handleWindowOrder);
+    };
   }, []);
 
   const handleSendTestAlert = () => {

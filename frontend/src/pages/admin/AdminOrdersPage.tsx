@@ -19,15 +19,41 @@ export const AdminOrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [newOrderAlert, setNewOrderAlert] = useState<{
+    orderNumber: string;
+    customerName: string;
+    amount: number;
+  } | null>(null);
 
-  const fetchOrders = async () => {
-    setLoading(true);
+  const playOrderChime = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch {}
+  };
+
+  const fetchOrders = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    else setIsRefreshing(true);
     try {
       const [ordRes, partRes] = await Promise.all([
         api.getAdminOrders(statusFilter !== 'ALL' ? { status: statusFilter } : undefined),
@@ -37,11 +63,66 @@ export const AdminOrdersPage: React.FC = () => {
       if (partRes.success) setPartners(partRes.data);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchOrders();
+
+    // Fast polling every 4 seconds for instant cross-device order arrival
+    const interval = setInterval(() => {
+      fetchOrders(true);
+    }, 4000);
+
+    // Instant zero-latency cross-tab notification
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('meat_corner_orders_sync');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'ORDER_CREATED' && event.data.order) {
+          const newOrd = event.data.order;
+          playOrderChime();
+          setNewOrderAlert({
+            orderNumber: newOrd.orderNumber,
+            customerName: newOrd.customerName || newOrd.deliveryAddressSnapshot?.recipientName || 'Customer',
+            amount: newOrd.totalAmount
+          });
+          setOrders((prev) => {
+            if (prev.some((o) => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) {
+              return prev;
+            }
+            return [newOrd, ...prev];
+          });
+        }
+      };
+    } catch {}
+
+    const handleWindowOrder = (e: any) => {
+      if (e.detail) {
+        const newOrd = e.detail;
+        playOrderChime();
+        setNewOrderAlert({
+          orderNumber: newOrd.orderNumber,
+          customerName: newOrd.customerName || newOrd.deliveryAddressSnapshot?.recipientName || 'Customer',
+          amount: newOrd.totalAmount
+        });
+        setOrders((prev) => {
+          if (prev.some((o) => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) {
+            return prev;
+          }
+          return [newOrd, ...prev];
+        });
+      }
+    };
+
+    window.addEventListener('meat_corner_order_placed', handleWindowOrder);
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener('meat_corner_order_placed', handleWindowOrder);
+    };
   }, [statusFilter]);
 
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
@@ -110,10 +191,36 @@ export const AdminOrdersPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Real-time Order Arrival Alert */}
+      {newOrderAlert && (
+        <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between text-emerald-900 shadow-md animate-bounce">
+          <div className="flex items-center space-x-3">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
+            </span>
+            <span className="font-bold text-sm">
+              🔔 Instant Order Alert: #{newOrderAlert.orderNumber} received from {newOrderAlert.customerName} (₹{newOrderAlert.amount})!
+            </span>
+          </div>
+          <button
+            onClick={() => setNewOrderAlert(null)}
+            className="text-xs bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-emerald-800 transition"
+          >
+            Acknowledge
+          </button>
+        </div>
+      )}
+
       {/* Page Title & Search Filter */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-charcoal">Order Management & Fulfillment</h1>
+          <h1 className="text-2xl font-black text-charcoal flex items-center gap-2">
+            Order Management & Fulfillment
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 animate-pulse">
+              ● Live Sync
+            </span>
+          </h1>
           <p className="text-xs text-gray-500">Live order butchery queue, partner assignments, and customer deliveries</p>
         </div>
 
@@ -130,10 +237,12 @@ export const AdminOrdersPage: React.FC = () => {
           </div>
 
           <button
-            onClick={fetchOrders}
-            className="p-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-brand-700 hover:bg-gray-50 shadow-sm"
+            onClick={() => fetchOrders(false)}
+            title="Refresh orders list"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-700 hover:text-brand-700 hover:bg-gray-50 shadow-sm transition"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-brand-700' : ''}`} />
+            <span>Sync</span>
           </button>
         </div>
       </div>

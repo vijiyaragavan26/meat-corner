@@ -227,6 +227,77 @@ function saveLiveOrders(orders: any[]) {
   } catch {}
 }
 
+async function syncOrderToSupabase(order: any) {
+  try {
+    const payload = {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerId: order.customerId && order.customerId.startsWith('usr_') ? order.customerId : 'usr_cust_1',
+      deliveryAddressSnapshot: order.deliveryAddressSnapshot || {},
+      status: order.status || 'CONFIRMED',
+      paymentMethod: order.paymentMethod || 'COD',
+      paymentStatus: order.paymentStatus || 'PENDING',
+      subtotal: Number(order.subtotal) || 0,
+      deliveryCharge: Number(order.deliveryCharge) || 0,
+      discountAmount: Number(order.discountAmount) || 0,
+      taxAmount: Number(order.taxAmount) || 0,
+      totalAmount: Number(order.totalAmount) || 0,
+      deliverySlot: order.deliverySlot || 'Express (30-45 mins)',
+      deliveryOtp: String(order.deliveryOtp || '1234'),
+      distanceKm: Number(order.distanceKm) || 2.4,
+      estimatedMinutes: Number(order.estimatedMinutes) || 30,
+      createdAt: order.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await fetch(`${SUPABASE_URL}/rest/v1/Orders`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.warn('Could not sync order to Supabase:', err);
+  }
+}
+
+async function fetchSupabaseOrders(): Promise<any[]> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/Orders?select=*&order=createdAt.desc&limit=50`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((o: any) => ({
+          ...o,
+          customerName: o.deliveryAddressSnapshot?.recipientName || o.customerName || 'Customer',
+          customerPhone: o.deliveryAddressSnapshot?.phone || o.customerPhone || '',
+          items: o.items || [
+            {
+              id: 'oi_' + o.id,
+              productName: 'Fresh Chicken Order',
+              variantLabel: 'Standard Pack',
+              quantity: 1,
+              totalPrice: o.totalAmount,
+            }
+          ]
+        }));
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch orders from Supabase:', e);
+  }
+  return [];
+}
+
 const DEFAULT_CUSTOMERS = [
   {
     id: 'usr_cust_ragavan_8428',
@@ -1000,8 +1071,21 @@ export const api = {
     callApi('/orders', { method: 'POST', body: JSON.stringify(body) }, () => {
       const currentOrders = getLiveOrders();
       const addr = body.newAddress || body.deliveryAddress || {};
-      const recipient = addr.recipientName || 'Valued Customer';
-      const phone = addr.phone || '+919876543210';
+      let recipient = addr.recipientName || 'Valued Customer';
+      let phone = addr.phone || '+919876543210';
+      let customerId = 'usr_cust_demo';
+
+      try {
+        const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
+        if (u?.id) customerId = u.id;
+        if (u?.name && (!addr.recipientName || addr.recipientName === 'Valued Customer')) {
+          recipient = u.name;
+        }
+        if (u?.phone && (!addr.phone || addr.phone === '+919876543210')) {
+          phone = u.phone;
+        }
+      } catch {}
+
       const orderId = 'ord_' + Date.now();
       const orderNumber = 'MC-' + Math.floor(100000 + Math.random() * 900000);
       const subtotal = liveCart.subtotal || liveCart.pricing?.subtotal || 500;
@@ -1039,7 +1123,7 @@ export const api = {
       const newOrder = {
         id: orderId,
         orderNumber: orderNumber,
-        customerId: 'usr_cust_demo',
+        customerId: customerId,
         customerName: recipient,
         customerPhone: phone,
         status: 'CONFIRMED',
@@ -1075,6 +1159,21 @@ export const api = {
       saveLiveOrders(updated);
       liveCart.items = [];
       updateLiveCartPricing();
+
+      // Instant Broadcast to open Admin & Dashboard tabs (0ms latency)
+      try {
+        const channel = new BroadcastChannel('meat_corner_orders_sync');
+        channel.postMessage({ type: 'ORDER_CREATED', order: newOrder, timestamp: Date.now() });
+        channel.close();
+      } catch {}
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: newOrder }));
+      }
+
+      // Synchronize immediately to Supabase Cloud Database Orders table
+      syncOrderToSupabase(newOrder).catch(() => {});
+
       return newOrder;
     }),
 
@@ -1341,12 +1440,34 @@ export const api = {
     callApi(
       `/orders/admin/all${params ? '?' + new URLSearchParams(params).toString() : ''}`,
       {},
-      () => {
-        const orders = getLiveOrders();
+      async () => {
+        const localOrders = getLiveOrders();
+        const supaOrders = await fetchSupabaseOrders();
+
+        const orderMap = new Map<string, any>();
+
+        // 1. Supabase orders first (persisted cross-device cloud orders)
+        supaOrders.forEach((o) => {
+          const key = o.orderNumber || o.id;
+          orderMap.set(key, o);
+        });
+
+        // 2. Local orders (covers newly placed or in-memory orders)
+        localOrders.forEach((o) => {
+          const key = o.orderNumber || o.id;
+          if (!orderMap.has(key)) {
+            orderMap.set(key, o);
+          }
+        });
+
+        const merged = Array.from(orderMap.values()).sort(
+          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+
         if (params?.status && params.status !== 'ALL') {
-          return orders.filter((o) => o.status === params.status);
+          return merged.filter((o) => o.status === params.status);
         }
-        return orders;
+        return merged;
       }
     ),
 
