@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { createRazorpayPaymentOrder, verifyRazorpayPayment } from '../controllers/paymentController';
-import { authenticateJwt } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/create-order', authenticateJwt, createRazorpayPaymentOrder);
-router.post('/verify', authenticateJwt, verifyRazorpayPayment);
+router.post('/create-order', optionalAuth, createRazorpayPaymentOrder);
+router.post('/verify', optionalAuth, verifyRazorpayPayment);
 
 export default router;

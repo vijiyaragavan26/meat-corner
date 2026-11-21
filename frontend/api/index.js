@@ -41395,8 +41395,8 @@ var config = {
   supabaseUrl: process.env.SUPABASE_URL || "https://ajiovbilwinoiyjvzhcv.supabase.co",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc",
   razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_meatcorner",
-    keySecret: process.env.RAZORPAY_KEY_SECRET || "test_secret_meatcorner_key_2026"
+    keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_U2oEDCqKO7xmJr",
+    keySecret: process.env.RAZORPAY_KEY_SECRET || "58QMwjgUA3n9hC4yGTVLwNQ0"
   }
 };
 
@@ -45533,9 +45533,9 @@ var initialUsers = [
   },
   {
     id: "usr_del_1",
-    name: "Murugan K",
-    email: "delivery@meatcorner.in",
-    phone: "+919876543201",
+    name: "Poopesh M",
+    email: "mboopesh60@gmail.com",
+    phone: "+919360761595",
     passwordHash: "$2a$10$RVu0YpcTNA9itfvlPH7SUuWEHn1dDCh.temR5bGmZs1KqbA8b7T/u",
     // Delivery@123
     role: "DELIVERY_PARTNER",
@@ -46067,13 +46067,13 @@ var initialDeliveryPartners = [
   {
     id: "dp_1",
     userId: "usr_del_1",
-    fullName: "Murugan K",
-    phone: "+919876543201",
-    email: "delivery@meatcorner.in",
+    fullName: "Poopesh M",
+    phone: "+919360761595",
+    email: "mboopesh60@gmail.com",
     address: "18 Perundurai Road, Kanjikovil, Erode 638116",
-    drivingLicenseNo: "TN33-20190045128",
+    drivingLicenseNo: "TN33-2018-004921",
     vehicleType: "Motorcycle",
-    vehicleNumber: "TN 33 MC 4521",
+    vehicleNumber: "TN 33 BM 4921",
     approvalStatus: "APPROVED",
     isOnline: true,
     isAvailable: true,
@@ -46206,8 +46206,8 @@ var initialOrders = [
     addressId: "addr_1",
     deliveryAddressSnapshot: initialAddresses[0],
     deliveryPartnerId: "dp_1",
-    deliveryPartnerName: "Murugan K",
-    deliveryPartnerPhone: "+919876543201",
+    deliveryPartnerName: "Poopesh M",
+    deliveryPartnerPhone: "+919360761595",
     status: "PREPARING",
     paymentMethod: "COD",
     paymentStatus: "PENDING",
@@ -47481,20 +47481,21 @@ var createRazorpayPaymentOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Order ID is required" });
     }
     const order = db.getOrderById(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-    const amountInPaise = Math.round(order.totalAmount * 100);
+    const amountVal = order ? order.totalAmount : Number(req.body.amount) || 345;
+    const orderNumber = order?.orderNumber || (orderId.startsWith("MC-") ? orderId : `MC-${Date.now().toString().slice(-6)}`);
+    const custName = order?.customerName || req.body.customerName || "Customer";
+    const custPhone = order?.customerPhone || req.body.customerPhone || "+91 93607 61595";
+    const amountInPaise = Math.round(amountVal * 100);
     let razorpayOrderId = `order_rzp_${v4_default().substring(0, 12)}`;
     if (razorpayInstance && !config.razorpay.keyId.includes("test_meatcorner")) {
       try {
         const rzpOrder = await razorpayInstance.orders.create({
           amount: amountInPaise,
           currency: "INR",
-          receipt: order.orderNumber,
+          receipt: orderNumber.substring(0, 40),
           notes: {
-            orderId: order.id,
-            customerName: order.customerName || "Customer"
+            orderId: String(orderId),
+            customerName: String(custName)
           }
         });
         razorpayOrderId = rzpOrder.id;
@@ -47505,14 +47506,14 @@ var createRazorpayPaymentOrder = async (req, res) => {
     return res.json({
       success: true,
       data: {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
+        orderId,
+        orderNumber,
         razorpayOrderId,
         amount: amountInPaise,
         currency: "INR",
         keyId: config.razorpay.keyId,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone
+        customerName: custName,
+        customerPhone: custPhone
       }
     });
   } catch (err) {
@@ -47567,8 +47568,8 @@ var verifyRazorpayPayment = async (req, res) => {
 
 // backend/src/routes/paymentRoutes.ts
 var router5 = (0, import_express5.Router)();
-router5.post("/create-order", authenticateJwt, createRazorpayPaymentOrder);
-router5.post("/verify", authenticateJwt, verifyRazorpayPayment);
+router5.post("/create-order", optionalAuth, createRazorpayPaymentOrder);
+router5.post("/verify", optionalAuth, verifyRazorpayPayment);
 var paymentRoutes_default = router5;
 
 // backend/src/routes/deliveryRoutes.ts
