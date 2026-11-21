@@ -274,7 +274,8 @@ function normalizeSupabaseOrder(o: any) {
     items,
     deliveryPartnerId: o.deliveryPartnerId || null,
     deliveryPartner: partner || null,
-    status: o.status || 'CONFIRMED',
+    deliveryPartnerName: partner?.fullName || partner?.name || o.deliveryPartnerName || null,
+    status: o.status || 'PLACED',
     paymentMethod: o.paymentMethod || 'COD',
     paymentStatus: o.paymentStatus || 'PENDING',
     subtotal: Number(o.subtotal) || 0,
@@ -293,12 +294,52 @@ function normalizeSupabaseOrder(o: any) {
 
 async function syncOrderToSupabase(order: any, items: any[] = []) {
   try {
+    // 0. Ensure customerId exists in Users table to guarantee FK constraint passes
+    let targetCustomerId = order.customerId;
+    if (!targetCustomerId || !targetCustomerId.startsWith('usr_')) {
+      targetCustomerId = 'usr_cust_1';
+    } else {
+      try {
+        const uRes = await fetch(`${SUPABASE_URL}/rest/v1/Users?id=eq.${targetCustomerId}&select=id`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const uData = await uRes.json();
+        if (!Array.isArray(uData) || uData.length === 0) {
+          const recipientName = order.customerName || order.deliveryAddressSnapshot?.recipientName || 'Valued Customer';
+          const recipientPhone = order.customerPhone || order.deliveryAddressSnapshot?.phone || '+919876543210';
+          await fetch(`${SUPABASE_URL}/rest/v1/Users`, {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=ignore-duplicates'
+            },
+            body: JSON.stringify({
+              id: targetCustomerId,
+              name: recipientName,
+              email: `${targetCustomerId}@meatcorner.in`,
+              phone: recipientPhone,
+              passwordHash: '$2a$10$fkPdY0F.JT0TxDAoz81RJ.VWoOtB8HfPqsdP1oeZ7i4lvXb9UuFAK',
+              role: 'CUSTOMER',
+              isActive: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            })
+          });
+        }
+      } catch {
+        targetCustomerId = 'usr_cust_1';
+      }
+    }
+
     const payload = {
       id: order.id,
       orderNumber: order.orderNumber,
-      customerId: order.customerId && order.customerId.startsWith('usr_') ? order.customerId : 'usr_cust_1',
+      customerId: targetCustomerId,
       deliveryAddressSnapshot: order.deliveryAddressSnapshot || {},
-      status: order.status || 'CONFIRMED',
+      status: order.status || 'PLACED',
+      deliveryPartnerId: order.deliveryPartnerId || null,
       paymentMethod: order.paymentMethod || 'COD',
       paymentStatus: order.paymentStatus || 'PENDING',
       subtotal: Number(order.subtotal) || 0,
@@ -525,6 +566,7 @@ async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
           vehicleNumber: dp.vehicleNumber || 'TN 33 BM 4921',
           rating: dp.rating || 4.9,
           totalDeliveries: dp.totalDeliveries || 0,
+          approvalStatus: dp.approvalStatus || 'APPROVED',
           isOnline: dp.isOnline !== false,
           isAvailable: dp.isAvailable !== false,
           currentLat: dp.currentLat || 11.3832,
@@ -979,8 +1021,10 @@ export const api = {
           throw new Error('Invalid delivery partner password. Please use Poopesh@123');
         }
         const deliveryUser: any = {
-          id: 'usr_del_1',
-          name: 'Poopesh',
+          id: 'dp_1',
+          partnerId: 'dp_1',
+          userId: 'usr_del_1',
+          name: 'Poopesh M',
           email: 'delivery@meatcorner.in',
           phone: '+919360761595',
           role: 'DELIVERY_PARTNER',
@@ -1193,8 +1237,10 @@ export const api = {
         lower === 'poopesh'
       ) {
         const deliveryUser: any = {
-          id: 'usr_del_1',
-          name: 'Poopesh',
+          id: 'dp_1',
+          partnerId: 'dp_1',
+          userId: 'usr_del_1',
+          name: 'Poopesh M',
           email: 'delivery@meatcorner.in',
           phone: '+919360761595',
           role: 'DELIVERY_PARTNER',
@@ -1414,7 +1460,7 @@ export const api = {
         customerId: customerId,
         customerName: recipient,
         customerPhone: phone,
-        status: 'CONFIRMED',
+        status: 'PLACED',
         paymentMethod: body.paymentMethod || 'COD',
         paymentStatus: body.paymentMethod === 'RAZORPAY' ? 'PAID' : 'PENDING',
         totalAmount: total,
@@ -1426,16 +1472,17 @@ export const api = {
         deliveryAddressSnapshot: {
           recipientName: recipient,
           phone: phone,
-          line1: addr.line1 || '54 Perundurai Road',
+          line1: addr.line1 || '115/1 Main Street, Anna Nagar',
           line2: addr.line2 || '',
-          area: addr.area || 'Kanjikovil',
-          city: addr.city || 'Erode',
+          area: addr.area || 'Pallapalayam',
+          city: addr.city || 'Perundurai',
           pincode: addr.pincode || '638116',
           lat: addr.lat || 11.3850,
           lng: addr.lng || 77.5920
         },
-        deliveryPartnerId: 'dp_1',
-        deliveryPartner: DEMO_DELIVERY_PARTNERS[0],
+        deliveryPartnerId: null,
+        deliveryPartner: null,
+        deliveryPartnerName: null,
         deliverySlot: body.deliverySlot || 'Express (30-45 mins)',
         deliveryOtp: String(Math.floor(1000 + Math.random() * 9000)),
         distanceKm: 2.4,
@@ -1662,14 +1709,16 @@ export const api = {
       let partnerId = 'dp_1';
       try {
         const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
-        if (u?.id) partnerId = u.id;
+        if (u?.partnerId) partnerId = u.partnerId;
+        else if (u?.id === 'dp_1' || u?.id === 'usr_del_1' || (u?.phone && u.phone.includes('9360761595'))) partnerId = 'dp_1';
+        else if (u?.id?.startsWith('dp_')) partnerId = u.id;
       } catch {}
 
       const supaOrders = await fetchSupabaseDeliveryOrders(partnerId);
       const localOrders = getLiveOrders();
 
       const map = new Map<string, any>();
-      // 1. Add Supabase orders assigned to this partner or pending pickup
+      // 1. Add Supabase orders assigned to this partner or ready for pickup
       supaOrders.forEach((o) => {
         if (o.status !== 'DELIVERED' && o.status !== 'CANCELLED') {
           map.set(o.orderNumber || o.id, o);
@@ -1680,7 +1729,7 @@ export const api = {
       localOrders.forEach((o) => {
         const key = o.orderNumber || o.id;
         if (!map.has(key) && o.status !== 'DELIVERED' && o.status !== 'CANCELLED') {
-          if (o.deliveryPartnerId === partnerId || !o.deliveryPartnerId) {
+          if (o.deliveryPartnerId === partnerId || o.deliveryPartnerId === 'dp_1' || !o.deliveryPartnerId) {
             map.set(key, o);
           }
         }
@@ -1696,11 +1745,13 @@ export const api = {
       let partnerId = 'dp_1';
       try {
         const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
-        if (u?.id) partnerId = u.id;
+        if (u?.partnerId) partnerId = u.partnerId;
+        else if (u?.id === 'dp_1' || u?.id === 'usr_del_1' || (u?.phone && u.phone.includes('9360761595'))) partnerId = 'dp_1';
+        else if (u?.id?.startsWith('dp_')) partnerId = u.id;
       } catch {}
 
-      // Update Supabase Orders status and assignment
-      await updateSupabaseOrderStatus(id, 'PARTNER_ASSIGNED', { deliveryPartnerId: partnerId });
+      // Update Supabase Orders status to READY_FOR_PICKUP so rider can proceed to store pickup
+      await updateSupabaseOrderStatus(id, 'READY_FOR_PICKUP', { deliveryPartnerId: partnerId });
 
       // Update DeliveryAssignments record
       await fetch(`${SUPABASE_URL}/rest/v1/DeliveryAssignments?orderId=eq.${id}`, {
@@ -1720,12 +1771,12 @@ export const api = {
       const orders = getLiveOrders();
       const ord = orders.find((o) => o.id === id || o.orderNumber === id);
       if (ord) {
-        ord.status = 'PARTNER_ASSIGNED';
+        ord.status = 'READY_FOR_PICKUP';
         ord.deliveryPartnerId = partnerId;
         saveLiveOrders(orders);
       }
 
-      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'PARTNER_ASSIGNED', deliveryPartnerId: partnerId });
+      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'READY_FOR_PICKUP', deliveryPartnerId: partnerId });
       return { success: true };
     }),
 

@@ -165,6 +165,7 @@ export const AdminOrdersPage: React.FC = () => {
             setSelectedOrder(updatedOrder);
           }
         }
+        await fetchOrders(true);
         alert('Delivery partner assigned successfully!');
       }
     } catch (err: any) {
@@ -388,7 +389,10 @@ export const AdminOrdersPage: React.FC = () => {
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
                       <button
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setSelectedPartnerId(order.deliveryPartnerId || '');
+                        }}
                         className="bg-charcoal hover:bg-black text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
                       >
                         Manage
@@ -531,7 +535,7 @@ export const AdminOrdersPage: React.FC = () => {
                 >
                   <option value="">-- Choose verified rider --</option>
                   {partners
-                    .filter((p) => p.approvalStatus === 'APPROVED')
+                    .filter((p) => !p.approvalStatus || p.approvalStatus === 'APPROVED')
                     .map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.fullName} ({p.phone}) {p.isOnline ? '🟢 Online' : '⚪ Offline'}
