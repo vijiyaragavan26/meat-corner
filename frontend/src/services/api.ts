@@ -354,7 +354,7 @@ async function syncOrderToSupabase(order: any, items: any[] = []) {
       }).catch(e => console.warn('OrderItems insert warning:', e));
     }
 
-    // 3. Insert record into Payments table in Supabase
+    // 3. Insert record into Payments table in Supabase (PaymentTransactionStatus: AUTHORIZED, CAPTURED, FAILED, REFUNDED)
     await fetch(`${SUPABASE_URL}/rest/v1/Payments`, {
       method: 'POST',
       headers: {
@@ -366,9 +366,9 @@ async function syncOrderToSupabase(order: any, items: any[] = []) {
         id: 'pay_' + Date.now(),
         orderId: order.id,
         amount: order.totalAmount,
-        method: order.paymentMethod || 'COD',
-        status: order.paymentStatus === 'PAID' ? 'SUCCESS' : 'PENDING',
-        transactionId: order.paymentMethod === 'RAZORPAY' ? `rzp_${Date.now()}` : `cod_${Date.now()}`,
+        currency: 'INR',
+        gateway: order.paymentMethod || 'COD',
+        status: order.paymentStatus === 'PAID' ? 'CAPTURED' : 'AUTHORIZED',
         createdAt: new Date().toISOString()
       }),
     }).catch(e => console.warn('Payments insert warning:', e));
@@ -401,15 +401,17 @@ async function fetchSupabaseOrders(): Promise<any[]> {
 async function updateSupabaseOrderStatus(orderIdOrNumber: string, status: string, extraFields: Record<string, any> = {}) {
   try {
     const now = new Date().toISOString();
+    // Map status to valid database OrderStatus enum: PLACED, CONFIRMED, PREPARING, READY_FOR_PICKUP, PARTNER_ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, CANCELLED
+    const dbStatus = status === 'ACCEPTED' ? 'PARTNER_ASSIGNED' : status;
     const payload: any = {
-      status,
+      status: dbStatus,
       updatedAt: now,
       ...extraFields
     };
-    if (status === 'CONFIRMED' && !payload.confirmedAt) payload.confirmedAt = now;
-    if (status === 'PREPARING' && !payload.preparedAt) payload.preparedAt = now;
-    if (status === 'PICKED_UP' && !payload.pickedUpAt) payload.pickedUpAt = now;
-    if (status === 'DELIVERED') {
+    if (dbStatus === 'CONFIRMED' && !payload.confirmedAt) payload.confirmedAt = now;
+    if (dbStatus === 'PREPARING' && !payload.preparedAt) payload.preparedAt = now;
+    if (dbStatus === 'PICKED_UP' && !payload.pickedUpAt) payload.pickedUpAt = now;
+    if (dbStatus === 'DELIVERED') {
       if (!payload.deliveredAt) payload.deliveredAt = now;
       payload.paymentStatus = 'PAID';
     }
@@ -452,7 +454,7 @@ async function assignSupabaseDeliveryPartner(orderIdOrNumber: string, deliveryPa
       })
     });
 
-    // Also update/insert DeliveryAssignments table
+    // Also update/insert DeliveryAssignments table (enum AssignmentStatus: PENDING, ACCEPTED, REJECTED, COMPLETED, CANCELLED)
     await fetch(`${SUPABASE_URL}/rest/v1/DeliveryAssignments`, {
       method: 'POST',
       headers: {
@@ -464,7 +466,7 @@ async function assignSupabaseDeliveryPartner(orderIdOrNumber: string, deliveryPa
         id: 'asgn_' + Date.now(),
         orderId: orderIdOrNumber,
         deliveryPartnerId,
-        status: 'ASSIGNED',
+        status: 'PENDING',
         assignedAt: now
       })
     }).catch(() => {});
@@ -1698,18 +1700,32 @@ export const api = {
       } catch {}
 
       // Update Supabase Orders status and assignment
-      await updateSupabaseOrderStatus(id, 'ACCEPTED', { deliveryPartnerId: partnerId });
+      await updateSupabaseOrderStatus(id, 'PARTNER_ASSIGNED', { deliveryPartnerId: partnerId });
+
+      // Update DeliveryAssignments record
+      await fetch(`${SUPABASE_URL}/rest/v1/DeliveryAssignments?orderId=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: 'ACCEPTED',
+          respondedAt: new Date().toISOString()
+        })
+      }).catch(() => {});
 
       // Update local storage
       const orders = getLiveOrders();
       const ord = orders.find((o) => o.id === id || o.orderNumber === id);
       if (ord) {
-        ord.status = 'ACCEPTED';
+        ord.status = 'PARTNER_ASSIGNED';
         ord.deliveryPartnerId = partnerId;
         saveLiveOrders(orders);
       }
 
-      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'ACCEPTED', deliveryPartnerId: partnerId });
+      broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'PARTNER_ASSIGNED', deliveryPartnerId: partnerId });
       return { success: true };
     }),
 
@@ -1771,6 +1787,34 @@ export const api = {
           deliveredAt: now,
           cashCollected: cashCollected || ord?.totalAmount || 0,
         });
+
+        // Update DeliveryAssignments to COMPLETED
+        await fetch(`${SUPABASE_URL}/rest/v1/DeliveryAssignments?orderId=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'COMPLETED',
+            completedAt: now
+          })
+        }).catch(() => {});
+
+        // Update Payments table to CAPTURED
+        await fetch(`${SUPABASE_URL}/rest/v1/Payments?orderId=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'CAPTURED',
+            updatedAt: now
+          })
+        }).catch(() => {});
 
         if (ord) {
           ord.status = 'DELIVERED';
