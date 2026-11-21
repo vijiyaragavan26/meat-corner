@@ -334,7 +334,7 @@ export const AuthPage: React.FC = () => {
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. +91 98765 43210 or name@email.com"
+                      placeholder="e.g. +91 93607 61595 or mboopesh60@gmail.com"
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
                     />
                     <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
@@ -515,7 +515,7 @@ export const AuthPage: React.FC = () => {
                     required
                     value={regPhone}
                     onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
+                    placeholder="+91 93607 61595"
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
                   />
                   <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />

@@ -243,7 +243,7 @@ export const OrderTrackingPage: React.FC = () => {
 
           <div className="flex items-center space-x-3">
             <a
-              href={`tel:${order.deliveryPartnerPhone || '+919876543201'}`}
+              href={`tel:${order.deliveryPartnerPhone || '+919360761595'}`}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-3 rounded-xl shadow-md shadow-emerald-600/20 flex items-center space-x-2 transition"
             >
               <Phone className="w-4 h-4" />

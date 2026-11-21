@@ -278,7 +278,7 @@ export const CheckoutPage: React.FC = () => {
                       required
                       value={newRecipient}
                       onChange={(e) => setNewRecipient(e.target.value)}
-                      placeholder="e.g. Priya Dharshini"
+                      placeholder="e.g. Boopesh M"
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
                     />
                   </div>
