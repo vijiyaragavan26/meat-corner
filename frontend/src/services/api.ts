@@ -71,9 +71,27 @@ async function callApi<T>(
     });
 
     // Handle common static host errors (405 Method Not Allowed, 404, 502, 500)
+    const handleFallback = async () => {
+      if (!fallbackGenerator) return null;
+      const fb: any = await fallbackGenerator();
+      if (fb && typeof fb === 'object' && !Array.isArray(fb)) {
+        return {
+          success: fb.success !== false,
+          message: fb.message || 'Operation completed successfully',
+          data: fb.data !== undefined ? fb.data : fb,
+          ...fb,
+        };
+      }
+      return {
+        success: true,
+        message: typeof fb === 'string' ? fb : 'Operation completed successfully',
+        data: fb,
+      };
+    };
+
     if (res.status === 405 || res.status === 404 || res.status === 502 || res.status === 500) {
       if (fallbackGenerator) {
-        return { success: true, data: await fallbackGenerator() };
+        return (await handleFallback()) as T;
       }
     }
 
@@ -81,7 +99,7 @@ async function callApi<T>(
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
       if (fallbackGenerator) {
-        return { success: true, data: await fallbackGenerator() };
+        return (await handleFallback()) as T;
       }
     }
 
@@ -91,20 +109,33 @@ async function callApi<T>(
       json = JSON.parse(text);
     } catch {
       if (fallbackGenerator) {
-        return { success: true, data: await fallbackGenerator() };
+        return (await handleFallback()) as T;
       }
     }
 
     if (!res.ok || !json || json.success === false) {
       if (fallbackGenerator) {
-        return { success: true, data: await fallbackGenerator() };
+        return (await handleFallback()) as T;
       }
       throw new Error(json?.message || `Request failed with status ${res.status}`);
     }
     return json;
   } catch (err: any) {
     if (fallbackGenerator) {
-      return { success: true, data: await fallbackGenerator() };
+      const fb: any = await fallbackGenerator();
+      if (fb && typeof fb === 'object' && !Array.isArray(fb)) {
+        return {
+          success: fb.success !== false,
+          message: fb.message || 'Operation completed successfully',
+          data: fb.data !== undefined ? fb.data : fb,
+          ...fb,
+        } as T;
+      }
+      return {
+        success: true,
+        message: typeof fb === 'string' ? fb : 'Operation completed successfully',
+        data: fb,
+      } as T;
     }
     throw err;
   }
@@ -1980,7 +2011,12 @@ export const api = {
         }
 
         broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'DELIVERED', paymentStatus: 'PAID' });
-        return { success: true, verified: true };
+        return {
+          success: true,
+          verified: true,
+          message: 'Order verified and delivered successfully! Payment confirmed.',
+          order: ord || { id, status: 'DELIVERED', paymentStatus: 'PAID' }
+        };
       }
     ),
 
@@ -1988,12 +2024,27 @@ export const api = {
     callApi('/delivery/location', { method: 'POST', body: JSON.stringify(body) }, () => ({ success: true })),
 
   getDeliveryEarnings: () =>
-    callApi('/delivery/earnings', {}, () => ({
-      todayEarnings: 420,
-      weeklyEarnings: 2850,
-      totalOrders: 18,
-      payoutStatus: 'PAID',
-    })),
+    callApi('/delivery/earnings', {}, () => {
+      const orders = getLiveOrders();
+      const delivered = orders.filter((o) => o.status === 'DELIVERED');
+      const baseEarn = delivered.length * 40;
+      const records = delivered.map((o) => ({
+        id: 'earn_' + o.id,
+        orderId: o.id,
+        totalEarning: 40,
+        createdAt: o.deliveredAt || o.updatedAt || new Date().toISOString()
+      }));
+      return {
+        totalEarnings: 420 + baseEarn,
+        todayEarnings: 420 + baseEarn,
+        weeklyEarnings: 2850 + baseEarn,
+        totalOrders: 18 + delivered.length,
+        payoutStatus: 'PAID',
+        records: records.length > 0 ? records : [
+          { id: 'earn_sample_1', orderId: 'ord_1', totalEarning: 40, createdAt: new Date().toISOString() }
+        ]
+      };
+    }),
 
   // Admin Portal
   getAdminDashboard: () =>

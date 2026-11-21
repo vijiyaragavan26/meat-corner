@@ -187,7 +187,11 @@ export const DeliveryDashboard: React.FC = () => {
         cashCollected ? Number(cashCollected) : undefined
       );
       if (res.success) {
-        alert(res.message);
+        const successMsg =
+          res.message ||
+          (res as any)?.data?.message ||
+          'Order verified and delivered successfully! Earnings credited.';
+        alert(successMsg);
         setVerifyingOrderId(null);
         setEnteredOtp('');
         setCashCollected('');
