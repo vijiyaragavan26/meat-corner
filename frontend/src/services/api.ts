@@ -258,6 +258,25 @@ function saveLiveOrders(orders: any[]) {
   } catch {}
 }
 
+function getStoredDeliveryEarnings(): any[] {
+  try {
+    const saved = localStorage.getItem('meat_corner_delivery_earnings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+function saveStoredDeliveryEarnings(records: any[]) {
+  try {
+    localStorage.setItem('meat_corner_delivery_earnings', JSON.stringify(records));
+  } catch {}
+}
+
 function broadcastOrderEvent(type: string, detail: any) {
   try {
     const ch = new BroadcastChannel('meat_corner_orders_sync');
@@ -601,6 +620,10 @@ async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
       if (Array.isArray(data) && data.length > 0) {
         list = data.map((dp: any) => {
           const isPoopesh = dp.id === 'dp_1' || (dp.phone && dp.phone.includes('9360761595'));
+          const storedEarnings = getStoredDeliveryEarnings();
+          const deliveryCount = isPoopesh
+            ? Math.max(Number(dp.totalDeliveries) || 0, storedEarnings.length)
+            : (Number(dp.totalDeliveries) || 0);
           return {
             id: dp.id,
             name: isPoopesh ? 'Poopesh M' : (dp.fullName || dp.name),
@@ -611,7 +634,7 @@ async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
             vehicleNumber: dp.vehicleNumber || 'TN 33 BM 4921',
             drivingLicenseNo: dp.drivingLicenseNo || 'TN33-2018-004921',
             rating: Number(dp.rating) || 4.9,
-            totalDeliveries: Number(dp.totalDeliveries) || 0,
+            totalDeliveries: deliveryCount,
             commissionRate: Number(dp.commissionRate) || 40,
             approvalStatus: dp.approvalStatus || 'APPROVED',
             isOnline: dp.isOnline !== false,
@@ -1819,14 +1842,46 @@ export const api = {
         };
       }
 
+      // Compute accurate active orders, completed orders, and wallet balance
+      const supaOrders = await fetchSupabaseDeliveryOrders(partnerId).catch(() => []);
+      const localOrders = getLiveOrders();
+      const storedEarnings = getStoredDeliveryEarnings();
+
+      const orderMap = new Map<string, any>();
+      supaOrders.forEach((o) => orderMap.set(o.orderNumber || o.id, o));
+      localOrders.forEach((o) => {
+        const key = o.orderNumber || o.id;
+        if (!orderMap.has(key)) orderMap.set(key, o);
+        else if (o.status === 'DELIVERED') orderMap.set(key, { ...orderMap.get(key), ...o });
+      });
+
+      const allOrders = Array.from(orderMap.values());
+      const partnerOrders = allOrders.filter(
+        (o) => o.deliveryPartnerId === partnerId || o.deliveryPartnerId === 'dp_1' || !o.deliveryPartnerId
+      );
+
+      const activeOrders = partnerOrders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
+      const completedOrders = partnerOrders.filter((o) => o.status === 'DELIVERED');
+
+      const completedCount = Math.max(completedOrders.length, storedEarnings.length);
+      const totalEarned = storedEarnings.length > 0
+        ? storedEarnings.reduce((sum, r) => sum + (Number(r.totalEarning) || 40), 0)
+        : completedCount * 40;
+
       return {
-        partner,
+        partner: {
+          ...partner,
+          totalDeliveries: completedCount,
+        },
         user: {
           ...userObj,
           name: partner.fullName || 'Poopesh M',
           phone: partner.phone || '+91 93607 61595',
           email: partner.email || 'mboopesh60@gmail.com',
         },
+        activeOrdersCount: activeOrders.length,
+        completedOrdersCount: completedCount,
+        totalEarned: totalEarned,
       };
     }),
 
@@ -1861,10 +1916,14 @@ export const api = {
         }
       });
 
-      // 2. Add local orders if matching
+      // 2. Add local orders if matching; and PURGE if delivered or cancelled in localOrders
       localOrders.forEach((o) => {
         const key = o.orderNumber || o.id;
-        if (!map.has(key) && o.status !== 'DELIVERED' && o.status !== 'CANCELLED') {
+        if (o.status === 'DELIVERED' || o.status === 'CANCELLED') {
+          map.delete(key);
+          if (o.id) map.delete(o.id);
+          if (o.orderNumber) map.delete(o.orderNumber);
+        } else if (!map.has(key)) {
           if (o.deliveryPartnerId === partnerId || o.deliveryPartnerId === 'dp_1' || !o.deliveryPartnerId) {
             map.set(key, o);
           }
@@ -2003,18 +2062,67 @@ export const api = {
           })
         }).catch(() => {});
 
-        if (ord) {
-          ord.status = 'DELIVERED';
-          ord.paymentStatus = 'PAID';
-          ord.deliveredAt = now;
-          saveLiveOrders(localOrders);
+        // Persist delivery earning into stored records
+        const storedEarnings = getStoredDeliveryEarnings();
+        const orderKey = ord?.orderNumber || id;
+        if (!storedEarnings.some((e: any) => e.orderId === id || e.orderNumber === orderKey)) {
+          storedEarnings.unshift({
+            id: 'earn_' + Date.now(),
+            orderId: id,
+            orderNumber: orderKey,
+            totalEarning: 40,
+            baseFee: 40,
+            distanceBonus: 0,
+            tipAmount: 0,
+            payoutStatus: 'PAID',
+            createdAt: now,
+          });
+          saveStoredDeliveryEarnings(storedEarnings);
         }
 
-        broadcastOrderEvent('ORDER_UPDATED', { orderId: id, status: 'DELIVERED', paymentStatus: 'PAID' });
+        // Update localOrders array and save immediately
+        const localTarget = localOrders.find((o) => o.id === id || o.orderNumber === id);
+        if (localTarget) {
+          localTarget.status = 'DELIVERED';
+          localTarget.paymentStatus = 'PAID';
+          localTarget.deliveredAt = now;
+        } else if (ord) {
+          localOrders.unshift({
+            ...ord,
+            status: 'DELIVERED',
+            paymentStatus: 'PAID',
+            deliveredAt: now,
+          });
+        }
+        saveLiveOrders(localOrders);
+
+        // Update DeliveryPartners in Supabase totalDeliveries
+        await fetch(`${SUPABASE_URL}/rest/v1/DeliveryPartners?id=eq.dp_1`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            totalDeliveries: storedEarnings.length,
+            updatedAt: now
+          })
+        }).catch(() => {});
+
+        broadcastOrderEvent('ORDER_UPDATED', {
+          orderId: id,
+          orderNumber: orderKey,
+          status: 'DELIVERED',
+          paymentStatus: 'PAID',
+          earningAwarded: 40,
+          deliveredAt: now
+        });
+
         return {
           success: true,
           verified: true,
-          message: 'Order verified and delivered successfully! Payment confirmed.',
+          message: 'Delivery confirmed! Earning of ₹40 added to your wallet.',
           order: ord || { id, status: 'DELIVERED', paymentStatus: 'PAID' }
         };
       }
@@ -2024,25 +2132,59 @@ export const api = {
     callApi('/delivery/location', { method: 'POST', body: JSON.stringify(body) }, () => ({ success: true })),
 
   getDeliveryEarnings: () =>
-    callApi('/delivery/earnings', {}, () => {
-      const orders = getLiveOrders();
-      const delivered = orders.filter((o) => o.status === 'DELIVERED');
-      const baseEarn = delivered.length * 40;
-      const records = delivered.map((o) => ({
-        id: 'earn_' + o.id,
-        orderId: o.id,
-        totalEarning: 40,
-        createdAt: o.deliveredAt || o.updatedAt || new Date().toISOString()
-      }));
+    callApi('/delivery/earnings', {}, async () => {
+      let partnerId = 'dp_1';
+      try {
+        const u = JSON.parse(localStorage.getItem('meat_corner_user') || '{}');
+        if (u?.partnerId) partnerId = u.partnerId;
+        else if (u?.id === 'dp_1' || u?.id === 'usr_del_1' || (u?.phone && u.phone.includes('9360761595'))) partnerId = 'dp_1';
+      } catch {}
+
+      const localOrders = getLiveOrders();
+      const supaOrders = await fetchSupabaseDeliveryOrders(partnerId).catch(() => []);
+      const orderMap = new Map<string, any>();
+      supaOrders.forEach((o) => orderMap.set(o.orderNumber || o.id, o));
+      localOrders.forEach((o) => {
+        const key = o.orderNumber || o.id;
+        if (!orderMap.has(key)) orderMap.set(key, o);
+        else if (o.status === 'DELIVERED') orderMap.set(key, { ...orderMap.get(key), ...o });
+      });
+
+      const delivered = Array.from(orderMap.values()).filter((o) => o.status === 'DELIVERED');
+      const storedEarnings = getStoredDeliveryEarnings();
+
+      // Ensure every delivered order has an earning entry in storedEarnings
+      const recordsMap = new Map<string, any>();
+      storedEarnings.forEach((r: any) => recordsMap.set(r.orderId || r.orderNumber, r));
+      delivered.forEach((o: any) => {
+        const key = o.orderNumber || o.id;
+        if (!recordsMap.has(key) && !recordsMap.has(o.id) && !recordsMap.has(o.orderNumber)) {
+          recordsMap.set(key, {
+            id: 'earn_' + (o.id || key),
+            orderId: o.id || key,
+            orderNumber: o.orderNumber || key,
+            totalEarning: 40,
+            baseFee: 40,
+            distanceBonus: 0,
+            tipAmount: 0,
+            payoutStatus: 'PAID',
+            createdAt: o.deliveredAt || o.updatedAt || new Date().toISOString(),
+          });
+        }
+      });
+
+      const records = Array.from(recordsMap.values()).sort(
+        (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+      const totalEarn = records.reduce((sum: number, r: any) => sum + (Number(r.totalEarning) || 40), 0);
+
       return {
-        totalEarnings: 420 + baseEarn,
-        todayEarnings: 420 + baseEarn,
-        weeklyEarnings: 2850 + baseEarn,
-        totalOrders: 18 + delivered.length,
+        totalEarnings: totalEarn,
+        todayEarnings: totalEarn,
+        weeklyEarnings: totalEarn,
+        totalOrders: records.length,
         payoutStatus: 'PAID',
-        records: records.length > 0 ? records : [
-          { id: 'earn_sample_1', orderId: 'ord_1', totalEarning: 40, createdAt: new Date().toISOString() }
-        ]
+        records: records,
       };
     }),
 

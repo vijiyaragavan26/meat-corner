@@ -178,20 +178,57 @@ export const DeliveryDashboard: React.FC = () => {
     e.preventDefault();
     if (!verifyingOrderId || !enteredOtp.trim()) return;
 
+    const targetOrderId = verifyingOrderId;
     setOtpError(null);
     setIsSubmittingOtp(true);
     try {
       const res = await api.verifyDeliveryOtp(
-        verifyingOrderId,
+        targetOrderId,
         enteredOtp.trim(),
         cashCollected ? Number(cashCollected) : undefined
       );
       if (res.success) {
+        // 1. Immediately remove delivered order from assigned list!
+        setAssignments((prev) =>
+          prev.filter((a) => a.id !== targetOrderId && a.orderNumber !== targetOrderId)
+        );
+
+        // 2. Immediately increment wallet and completed orders in local state
+        setEarningsData((prev: any) => {
+          const prevTotal = Number(prev?.totalEarnings) || 0;
+          const newRec = {
+            id: 'earn_' + Date.now(),
+            orderId: targetOrderId,
+            totalEarning: 40,
+            baseFee: 40,
+            distanceBonus: 0,
+            tipAmount: 0,
+            createdAt: new Date().toISOString(),
+          };
+          return {
+            ...prev,
+            totalEarnings: prevTotal + 40,
+            todayEarnings: (Number(prev?.todayEarnings) || 0) + 40,
+            weeklyEarnings: (Number(prev?.weeklyEarnings) || 0) + 40,
+            totalOrders: (Number(prev?.totalOrders) || 0) + 1,
+            records: [newRec, ...(prev?.records || [])],
+          };
+        });
+
+        // 3. Immediately update profile stats for the 3 metric cards
+        setProfile((prev: any) => ({
+          ...prev,
+          activeOrdersCount: Math.max(0, (prev?.activeOrdersCount || assignments.length) - 1),
+          completedOrdersCount: (Number(prev?.completedOrdersCount) || 0) + 1,
+          totalEarned: (Number(prev?.totalEarned) || 0) + 40,
+        }));
+
         const successMsg =
           res.message ||
           (res as any)?.data?.message ||
-          'Order verified and delivered successfully! Earnings credited.';
+          'Delivery confirmed! Earning of ₹40 added to your wallet.';
         alert(successMsg);
+
         setVerifyingOrderId(null);
         setEnteredOtp('');
         setCashCollected('');
@@ -203,6 +240,10 @@ export const DeliveryDashboard: React.FC = () => {
       setIsSubmittingOtp(false);
     }
   };
+
+  const activeAssignments = assignments.filter(
+    (a) => a.status !== 'DELIVERED' && a.status !== 'CANCELLED'
+  );
 
   if (loading) {
     return (
@@ -287,17 +328,29 @@ export const DeliveryDashboard: React.FC = () => {
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm">
             <span className="text-[10px] font-bold text-gray-400 uppercase block">Active</span>
-            <span className="text-xl font-black text-emerald-700">{profile?.activeOrdersCount || 0}</span>
+            <span className="text-xl font-black text-emerald-700">
+              {profile?.activeOrdersCount !== undefined
+                ? profile.activeOrdersCount
+                : activeAssignments.length}
+            </span>
           </div>
 
           <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm">
             <span className="text-[10px] font-bold text-gray-400 uppercase block">Completed</span>
-            <span className="text-xl font-black text-charcoal">{profile?.completedOrdersCount || 0}</span>
+            <span className="text-xl font-black text-charcoal">
+              {profile?.completedOrdersCount !== undefined
+                ? profile.completedOrdersCount
+                : (earningsData?.totalOrders || 0)}
+            </span>
           </div>
 
           <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm">
             <span className="text-[10px] font-bold text-gray-400 uppercase block">Wallet</span>
-            <span className="text-xl font-black text-brand-700">₹{profile?.totalEarned || 0}</span>
+            <span className="text-xl font-black text-brand-700">
+              ₹{profile?.totalEarned !== undefined
+                ? profile.totalEarned
+                : (earningsData?.totalEarnings || 0)}
+            </span>
           </div>
         </div>
 
@@ -309,7 +362,7 @@ export const DeliveryDashboard: React.FC = () => {
               activeTab === 'deliveries' ? 'bg-emerald-800 text-white shadow' : 'text-gray-600'
             }`}
           >
-            Assigned Orders ({assignments.length})
+            Assigned Orders ({activeAssignments.length})
           </button>
           <button
             onClick={() => setActiveTab('earnings')}
@@ -332,7 +385,7 @@ export const DeliveryDashboard: React.FC = () => {
         {/* TAB 1: Assigned Deliveries */}
         {activeTab === 'deliveries' && (
           <div className="space-y-4">
-            {assignments.length === 0 ? (
+            {activeAssignments.length === 0 ? (
               <div className="bg-white rounded-3xl p-8 text-center border border-gray-200 space-y-3">
                 <Bike className="w-12 h-12 text-gray-300 mx-auto" />
                 <h3 className="font-bold text-base text-charcoal">No active assignments</h3>
@@ -343,7 +396,7 @@ export const DeliveryDashboard: React.FC = () => {
                 </p>
               </div>
             ) : (
-              assignments.map((order) => {
+              activeAssignments.map((order) => {
                 const isCod = order.paymentMethod === 'COD';
 
                 return (
