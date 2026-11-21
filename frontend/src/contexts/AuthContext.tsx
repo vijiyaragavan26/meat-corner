@@ -71,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 id: payload.sub || 'usr_cust_' + Date.now().toString().slice(-4),
                 name: payload.user_metadata?.full_name || payload.user_metadata?.name || email.split('@')[0] || 'Customer',
                 email: email,
-                phone: payload.user_metadata?.phone || '+919876543210',
+                phone: payload.user_metadata?.phone || '+91 93607 61595',
                 role: 'CUSTOMER'
               };
 

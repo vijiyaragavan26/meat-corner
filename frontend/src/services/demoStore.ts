@@ -307,8 +307,8 @@ export const DEMO_ORDERS: any[] = [
     deliveryPartnerId: 'dp_1',
     deliveryPartner: {
       id: 'dp_1',
-      fullName: 'Murugan K',
-      phone: '+919876543201',
+      fullName: 'Poopesh M',
+      phone: '+91 93607 61595',
       vehicleType: 'Motorcycle',
       vehicleNumber: 'TN 33 BM 4921',
       currentLat: 11.3820,
@@ -441,9 +441,9 @@ export const DEMO_ORDERS: any[] = [
 export const DEMO_DELIVERY_PARTNERS = [
   {
     id: 'dp_1',
-    fullName: 'Murugan K',
-    phone: '+919876543201',
-    email: 'delivery@meatcorner.in',
+    fullName: 'Poopesh M',
+    phone: '+91 93607 61595',
+    email: 'mboopesh60@gmail.com',
     vehicleType: 'Motorcycle',
     vehicleNumber: 'TN 33 BM 4921',
     approvalStatus: 'APPROVED',

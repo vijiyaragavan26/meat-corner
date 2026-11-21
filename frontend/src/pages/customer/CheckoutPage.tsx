@@ -108,7 +108,7 @@ export const CheckoutPage: React.FC = () => {
       }
       try {
         const custPhone = newPhone.trim();
-        const cleanDigits = custPhone.replace(/\D/g, '') || '9876543210';
+        const cleanDigits = custPhone.replace(/\D/g, '') || '9360761595';
         currentUser = await register({
           name: newRecipient.trim(),
           email: `${cleanDigits}@meatcorner.in`,

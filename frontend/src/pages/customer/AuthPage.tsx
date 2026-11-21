@@ -498,7 +498,7 @@ export const AuthPage: React.FC = () => {
                     required
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    placeholder="e.g. Priya Dharshini"
+                    placeholder="e.g. Boopesh M"
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
                   />
                   <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />

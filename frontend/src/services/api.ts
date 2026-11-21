@@ -230,12 +230,14 @@ function saveLiveOrders(orders: any[]) {
 function broadcastOrderEvent(type: string, detail: any) {
   try {
     const ch = new BroadcastChannel('meat_corner_orders_sync');
-    ch.postMessage({ type, detail, timestamp: Date.now() });
+    const orderPayload = detail?.order || detail;
+    ch.postMessage({ type, ...detail, detail, order: orderPayload, timestamp: Date.now() });
     ch.close();
   } catch {}
   if (typeof window !== 'undefined') {
+    const orderPayload = detail?.order || detail;
     window.dispatchEvent(new CustomEvent('meat_corner_orders_changed', { detail: { type, ...detail } }));
-    window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: detail.order || detail }));
+    window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: orderPayload }));
   }
 }
 
@@ -306,7 +308,7 @@ async function syncOrderToSupabase(order: any, items: any[] = []) {
         const uData = await uRes.json();
         if (!Array.isArray(uData) || uData.length === 0) {
           const recipientName = order.customerName || order.deliveryAddressSnapshot?.recipientName || 'Valued Customer';
-          const recipientPhone = order.customerPhone || order.deliveryAddressSnapshot?.phone || '+919876543210';
+          const recipientPhone = order.customerPhone || order.deliveryAddressSnapshot?.phone || '+91 93607 61595';
           await fetch(`${SUPABASE_URL}/rest/v1/Users`, {
             method: 'POST',
             headers: {
@@ -910,7 +912,7 @@ export const api = {
         ? rawPhone
         : cleanPhone.length === 10
         ? `+91 ${cleanPhone}`
-        : rawPhone || '+91 98765 43210';
+        : rawPhone || '+91 93607 61595';
 
       const newUser: any = {
         id: 'usr_cust_' + Date.now().toString().slice(-6),
@@ -1396,7 +1398,7 @@ export const api = {
       const currentOrders = getLiveOrders();
       const addr = body.newAddress || body.deliveryAddress || {};
       let recipient = addr.recipientName || 'Valued Customer';
-      let phone = addr.phone || '+919876543210';
+      let phone = addr.phone || '+91 93607 61595';
       let customerId = 'usr_cust_demo';
 
       try {
@@ -1405,7 +1407,7 @@ export const api = {
         if (u?.name && (!addr.recipientName || addr.recipientName === 'Valued Customer')) {
           recipient = u.name;
         }
-        if (u?.phone && (!addr.phone || addr.phone === '+919876543210')) {
+        if (u?.phone && (!addr.phone || addr.phone === '+91 93607 61595' || addr.phone === '+919876543210')) {
           phone = u.phone;
         }
       } catch {}
@@ -1555,6 +1557,29 @@ export const api = {
       try {
         localStorage.removeItem('meat_corner_addresses');
         localStorage.removeItem('meat_corner_user_addresses');
+        // Actively clean out any lingering legacy mock addresses
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('meat_corner_addresses') || key.includes('address'))) {
+            try {
+              const raw = localStorage.getItem(key);
+              if (raw && (raw.includes('Priya') || raw.includes('Plot No 24') || raw.includes('9876543210'))) {
+                const list = JSON.parse(raw);
+                if (Array.isArray(list)) {
+                  const cleaned = list.filter(
+                    (a: any) =>
+                      a.id !== 'addr_1' &&
+                      a.id !== 'addr_2' &&
+                      !/priya/i.test(a.recipientName || '') &&
+                      !/gandhi\s*nagar/i.test(a.line1 || '') &&
+                      !/9876543210/.test(a.phone || '')
+                  );
+                  localStorage.setItem(key, JSON.stringify(cleaned));
+                }
+              }
+            } catch {}
+          }
+        }
         const userRaw = localStorage.getItem('meat_corner_user');
         if (userRaw) {
           const u = JSON.parse(userRaw);
@@ -1564,12 +1589,13 @@ export const api = {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            // Strip out any legacy hardcoded Priya Dharshini mock address
             const cleaned = parsed.filter(
               (a: any) =>
                 a.id !== 'addr_1' &&
-                a.recipientName !== 'Priya Dharshini' &&
-                !(a.line1 || '').includes('Plot No 24')
+                a.id !== 'addr_2' &&
+                !/priya/i.test(a.recipientName || '') &&
+                !/gandhi\s*nagar/i.test(a.line1 || '') &&
+                !/9876543210/.test(a.phone || '')
             );
             return cleaned;
           }
@@ -2079,9 +2105,9 @@ export const api = {
 
       // 3. Compute order activity and lifetime spend
       orders.forEach((ord: any) => {
-        const phone = ord.deliveryAddress?.phone || ord.userPhone || '+919876543210';
+        const phone = ord.deliveryAddress?.phone || ord.userPhone || '+91 93607 61595';
         const key = phone.replace(/\D/g, '') || phone;
-        const name = ord.deliveryAddress?.fullName || ord.userName || 'Priya Dharshini';
+        const name = ord.deliveryAddress?.fullName || ord.userName || 'Boopesh M';
         const total = Number(ord.totalAmount) || 0;
         if (customerMap.has(key)) {
           const existing = customerMap.get(key);
@@ -2273,7 +2299,7 @@ export const api = {
         id: 'tkt_1',
         orderNumber: 'MC-20261113-4117',
         subject: 'Extra Turmeric Wash Request',
-        customerName: 'Priya Dharshini',
+        customerName: 'Boopesh M',
         status: 'RESOLVED',
         adminReply: 'Yes, our master butcher has turmeric washed your order.',
         createdAt: new Date().toISOString(),
@@ -2285,7 +2311,7 @@ export const api = {
       id,
       orderNumber: 'MC-20261113-4117',
       subject: 'Extra Turmeric Wash Request',
-      customerName: 'Priya Dharshini',
+      customerName: 'Boopesh M',
       status: body.status || 'RESOLVED',
       adminReply: body.adminReply || 'Thank you for contacting Meat Corner support.',
       createdAt: new Date().toISOString(),

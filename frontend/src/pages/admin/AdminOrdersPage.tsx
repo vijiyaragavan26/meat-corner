@@ -70,18 +70,18 @@ export const AdminOrdersPage: React.FC = () => {
   useEffect(() => {
     fetchOrders();
 
-    // Fast polling every 4 seconds for instant cross-device order arrival
+    // Fast polling every 3 seconds for instant cross-device order arrival
     const interval = setInterval(() => {
       fetchOrders(true);
-    }, 4000);
+    }, 3000);
 
     // Instant zero-latency cross-tab notification
     let channel: BroadcastChannel | null = null;
     try {
       channel = new BroadcastChannel('meat_corner_orders_sync');
       channel.onmessage = (event) => {
-        if (event.data?.type === 'ORDER_CREATED' && event.data.order) {
-          const newOrd = event.data.order;
+        const newOrd = event.data?.order || event.data?.detail?.order || event.data?.detail;
+        if (event.data?.type === 'ORDER_CREATED' && newOrd) {
           playOrderChime();
           setNewOrderAlert({
             orderNumber: newOrd.orderNumber,

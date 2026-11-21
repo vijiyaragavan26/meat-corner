@@ -495,7 +495,7 @@ export const HomePage: React.FC = () => {
               "The freshness is unbelievable. No bad smell, pieces were neatly cut into curry cut, and the meat was so tender in our Chettinad gravy! Delivered in just 32 mins in Kanjikovil."
             </p>
             <div className="pt-2 border-t border-gray-50 flex items-center justify-between text-xs">
-              <span className="font-bold text-charcoal">Priya Dharshini</span>
+              <span className="font-bold text-charcoal">Boopesh M</span>
               <span className="text-green-700 font-semibold flex items-center">
                 <ShieldCheck className="w-3.5 h-3.5 mr-1" />
                 Verified Buyer
