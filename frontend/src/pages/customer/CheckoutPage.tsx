@@ -172,7 +172,66 @@ export const CheckoutPage: React.FC = () => {
       // 2. Handle Razorpay Online Payment Flow
       if (paymentMethod === 'RAZORPAY') {
         const rzpRes = await api.createRazorpayOrder(order.id);
-        if (rzpRes.success) {
+        const razorpayKeyId =
+          rzpRes.data?.keyId ||
+          (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ||
+          'rzp_test_U2oEDCqKO7xmJr';
+
+        if (typeof window !== 'undefined' && (window as any).Razorpay) {
+          await new Promise<void>((resolve, reject) => {
+            const options = {
+              key: razorpayKeyId,
+              amount: Math.round(order.totalAmount * 100),
+              currency: 'INR',
+              name: 'MPM Meat Corner',
+              description: `Chicken Order #${order.orderNumber || order.id}`,
+              image: '/logo.png',
+              order_id:
+                rzpRes.data?.razorpayOrderId?.startsWith('order_') &&
+                !rzpRes.data?.razorpayOrderId?.startsWith('order_rzp_')
+                  ? rzpRes.data.razorpayOrderId
+                  : undefined,
+              prefill: {
+                name: order.deliveryAddressSnapshot?.recipientName || user?.name || '',
+                contact:
+                  order.deliveryAddressSnapshot?.phone ||
+                  user?.phone ||
+                  '+91 93607 61595',
+                email: user?.email || 'customer@mpmmeatcorner.in',
+              },
+              theme: {
+                color: '#8B0000',
+              },
+              handler: async (response: any) => {
+                try {
+                  await api.verifyPayment({
+                    orderId: order.id,
+                    razorpayOrderId: response.razorpay_order_id || rzpRes.data?.razorpayOrderId,
+                    razorpayPaymentId: response.razorpay_payment_id,
+                    razorpaySignature:
+                      response.razorpay_signature || 'test_sig_' + Date.now(),
+                  });
+                  resolve();
+                } catch (e: any) {
+                  reject(new Error(e.message || 'Payment verification failed.'));
+                }
+              },
+              modal: {
+                ondismiss: () => {
+                  reject(new Error('Payment window closed. Please complete payment to place your order.'));
+                },
+              },
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', (resp: any) => {
+              reject(
+                new Error(resp.error?.description || 'Payment failed. Please try again.')
+              );
+            });
+            rzp.open();
+          });
+        } else {
           // Verify payment on backend with test signature or checkout callback
           const paymentId = 'pay_' + Math.random().toString(36).substring(2, 10);
           const sig = 'test_sig_' + Math.random().toString(36).substring(2, 10);
@@ -181,7 +240,7 @@ export const CheckoutPage: React.FC = () => {
             orderId: order.id,
             razorpayOrderId: rzpRes.data.razorpayOrderId,
             razorpayPaymentId: paymentId,
-            razorpaySignature: sig
+            razorpaySignature: sig,
           });
         }
       }

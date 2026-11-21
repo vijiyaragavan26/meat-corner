@@ -1650,7 +1650,7 @@ export const api = {
       razorpayOrderId: 'order_rzp_' + Date.now(),
       amount: 42500,
       currency: 'INR',
-      keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_meatcorner',
+      keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_U2oEDCqKO7xmJr',
     })),
 
   verifyPayment: (body: any) =>
