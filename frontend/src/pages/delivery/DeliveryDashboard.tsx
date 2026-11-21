@@ -223,15 +223,16 @@ export const DeliveryDashboard: React.FC = () => {
           totalEarned: (Number(prev?.totalEarned) || 0) + 40,
         }));
 
-        const successMsg =
-          res.message ||
-          (res as any)?.data?.message ||
-          'Delivery confirmed! Earning of ₹40 added to your wallet.';
-        alert(successMsg);
-
         setVerifyingOrderId(null);
         setEnteredOtp('');
         setCashCollected('');
+
+        const successMsg =
+          (res && typeof res.message === 'string' && res.message.trim())
+            ? res.message
+            : 'Delivery confirmed! Earning of ₹40 added to your wallet.';
+        alert(successMsg);
+
         fetchData();
       }
     } catch (err: any) {
@@ -244,6 +245,13 @@ export const DeliveryDashboard: React.FC = () => {
   const activeAssignments = assignments.filter(
     (a) => a.status !== 'DELIVERED' && a.status !== 'CANCELLED'
   );
+
+  const riderDisplayName =
+    partner?.fullName && !partner.fullName.includes('Murugan')
+      ? partner.fullName
+      : user?.name && !user.name.includes('Murugan')
+      ? user.name
+      : 'Poopesh M';
 
   if (loading) {
     return (
@@ -265,9 +273,9 @@ export const DeliveryDashboard: React.FC = () => {
               className="w-10 h-10 rounded-full object-cover border border-white/40 shadow shrink-0"
             />
             <div>
-              <h1 className="font-black text-sm">{partner?.fullName || user?.name}</h1>
+              <h1 className="font-black text-sm">{riderDisplayName}</h1>
               <span className="text-[10px] text-emerald-200 block -mt-0.5">
-                {partner?.vehicleNumber} • {partner?.rating} ★
+                {partner?.vehicleNumber || 'TN 33 BM 4921'} • {partner?.rating || 4.88} ★
               </span>
             </div>
           </div>
@@ -582,7 +590,7 @@ export const DeliveryDashboard: React.FC = () => {
             <div className="space-y-3 text-xs">
               <div>
                 <span className="text-gray-400 font-bold uppercase block text-[10px]">Driver Name</span>
-                <span className="font-bold text-charcoal">{partner.fullName}</span>
+                <span className="font-bold text-charcoal">{riderDisplayName}</span>
               </div>
               <div>
                 <span className="text-gray-400 font-bold uppercase block text-[10px]">Driving License Number</span>

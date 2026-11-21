@@ -171,7 +171,12 @@ export const CheckoutPage: React.FC = () => {
 
       // 2. Handle Razorpay Online Payment Flow
       if (paymentMethod === 'RAZORPAY') {
-        const rzpRes = await api.createRazorpayOrder(order.id);
+        const rzpRes = await api.createRazorpayOrder(
+          order.id,
+          order.totalAmount,
+          order.deliveryAddressSnapshot?.recipientName || user?.name || 'Customer',
+          order.deliveryAddressSnapshot?.phone || user?.phone || '+91 93607 61595'
+        );
         const razorpayKeyId =
           rzpRes.data?.keyId ||
           (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ||
@@ -190,7 +195,7 @@ export const CheckoutPage: React.FC = () => {
                 rzpRes.data?.razorpayOrderId?.startsWith('order_') &&
                 !rzpRes.data?.razorpayOrderId?.startsWith('order_rzp_')
                   ? rzpRes.data.razorpayOrderId
-                  : undefined,
+                  : (rzpRes.data?.razorpayOrderId || undefined),
               prefill: {
                 name: order.deliveryAddressSnapshot?.recipientName || user?.name || '',
                 contact:
@@ -198,9 +203,37 @@ export const CheckoutPage: React.FC = () => {
                   user?.phone ||
                   '+91 93607 61595',
                 email: user?.email || 'customer@mpmmeatcorner.in',
+                method: 'upi',
               },
               theme: {
                 color: '#8B0000',
+              },
+              config: {
+                display: {
+                  blocks: {
+                    upi: {
+                      name: 'Pay via UPI / QR / Apps',
+                      instruments: [
+                        {
+                          method: 'upi',
+                          apps: ['google_pay', 'phonepe', 'paytm', 'bhim'],
+                        },
+                      ],
+                    },
+                    other: {
+                      name: 'Cards, Netbanking & Wallets',
+                      instruments: [
+                        { method: 'card' },
+                        { method: 'netbanking' },
+                        { method: 'wallet' },
+                      ],
+                    },
+                  },
+                  sequence: ['block.upi', 'block.other'],
+                  preferences: {
+                    show_default_blocks: true,
+                  },
+                },
               },
               handler: async (response: any) => {
                 try {

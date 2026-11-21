@@ -14,8 +14,8 @@ export const AdminLoginPage: React.FC = () => {
     }
   }, [user, navigate]);
 
-  const [identifier, setIdentifier] = useState('7604906429');
-  const [password, setPassword] = useState('Vijay@123');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -106,7 +106,7 @@ export const AdminLoginPage: React.FC = () => {
                 disabled={lockoutTimer > 0}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="7604906429 or vijiyaragavan26@gmail.com"
+                placeholder="Enter admin mobile number or email"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 disabled:opacity-50"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />

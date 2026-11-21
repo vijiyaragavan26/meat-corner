@@ -13,8 +13,8 @@ export const DeliveryLoginPage: React.FC = () => {
     }
   }, [user, navigate]);
 
-  const [identifier, setIdentifier] = useState('9360761595');
-  const [password, setPassword] = useState('Poopesh@123');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -104,7 +104,7 @@ export const DeliveryLoginPage: React.FC = () => {
                 disabled={lockoutTimer > 0}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="9360761595 or delivery@meatcorner.in"
+                placeholder="Enter rider mobile number or email"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-700 disabled:opacity-50"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />

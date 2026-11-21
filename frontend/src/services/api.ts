@@ -1645,13 +1645,20 @@ export const api = {
     }),
 
   // Payment
-  createRazorpayOrder: (orderId: string) =>
-    callApi('/payments/create-order', { method: 'POST', body: JSON.stringify({ orderId }) }, () => ({
-      razorpayOrderId: 'order_rzp_' + Date.now(),
-      amount: 42500,
-      currency: 'INR',
-      keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_U2oEDCqKO7xmJr',
-    })),
+  createRazorpayOrder: (orderId: string, amount?: number, customerName?: string, customerPhone?: string) =>
+    callApi(
+      '/payments/create-order',
+      {
+        method: 'POST',
+        body: JSON.stringify({ orderId, amount, customerName, customerPhone }),
+      },
+      () => ({
+        razorpayOrderId: 'order_rzp_' + Date.now(),
+        amount: Math.round((amount || 345) * 100),
+        currency: 'INR',
+        keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_U2oEDCqKO7xmJr',
+      })
+    ),
 
   verifyPayment: (body: any) =>
     callApi('/payments/verify', { method: 'POST', body: JSON.stringify(body) }, async () => {
