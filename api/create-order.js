@@ -28,16 +28,21 @@ module.exports = async function handler(req, res) {
     }
     const { orderId, amount, currency = 'INR', receipt, customerName, customerPhone } = body || {};
 
-    // Calculate amount in paise (minimum 100 paise)
-    let amountInPaise = Number(amount);
-    if (amountInPaise === undefined || amountInPaise === null || isNaN(amountInPaise)) {
+    // Calculate amount in paise (Razorpay requires paise: ₹1 = 100 paise)
+    let amountInPaise;
+    if (body && body.amountInPaise !== undefined && !isNaN(Number(body.amountInPaise))) {
+      amountInPaise = Math.round(Number(body.amountInPaise));
+    } else if (amount !== undefined && !isNaN(Number(amount))) {
+      // Amount passed in Rupees (e.g. ₹125 -> 12500 paise)
+      amountInPaise = Math.round(Number(amount) * 100);
+    } else {
       amountInPaise = 34500;
     }
 
     if (amountInPaise < 100) {
       return res.status(400).json({
         success: false,
-        message: 'Amount must be at least 100 paise'
+        message: 'Amount must be at least 100 paise (₹1)'
       });
     }
 

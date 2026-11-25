@@ -35523,11 +35523,11 @@ if (import_dns.default.setDefaultResultOrder) {
 var createRazorpayPaymentOrder = async (req, res) => {
   try {
     const { orderId, amount, currency = "INR", receipt, customerName, customerPhone } = req.body || {};
-    const rawAmount = amount !== void 0 ? amount : req.body.amountInPaise;
     let amountInPaise;
-    if (rawAmount !== void 0 && rawAmount !== null) {
-      const num = Number(rawAmount);
-      amountInPaise = num < 100 ? Math.round(num * 100) : Math.round(num);
+    if (req.body?.amountInPaise !== void 0 && !isNaN(Number(req.body.amountInPaise))) {
+      amountInPaise = Math.round(Number(req.body.amountInPaise));
+    } else if (amount !== void 0 && !isNaN(Number(amount))) {
+      amountInPaise = Math.round(Number(amount) * 100);
     } else {
       const order2 = orderId ? db.getOrderById(orderId) : null;
       amountInPaise = order2 ? Math.round(order2.totalAmount * 100) : 34500;

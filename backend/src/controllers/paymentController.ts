@@ -14,11 +14,12 @@ export const createRazorpayPaymentOrder = async (req: AuthenticatedRequest, res:
   try {
     const { orderId, amount, currency = 'INR', receipt, customerName, customerPhone } = req.body || {};
 
-    const rawAmount = amount !== undefined ? amount : req.body.amountInPaise;
     let amountInPaise: number;
-    if (rawAmount !== undefined && rawAmount !== null) {
-      const num = Number(rawAmount);
-      amountInPaise = num < 100 ? Math.round(num * 100) : Math.round(num);
+    if (req.body?.amountInPaise !== undefined && !isNaN(Number(req.body.amountInPaise))) {
+      amountInPaise = Math.round(Number(req.body.amountInPaise));
+    } else if (amount !== undefined && !isNaN(Number(amount))) {
+      // Amount passed in Rupees (e.g. ₹125 -> 12500 paise)
+      amountInPaise = Math.round(Number(amount) * 100);
     } else {
       const order = orderId ? db.getOrderById(orderId) : null;
       amountInPaise = order ? Math.round(order.totalAmount * 100) : 34500;

@@ -1650,7 +1650,13 @@ export const api = {
       '/payments/create-order',
       {
         method: 'POST',
-        body: JSON.stringify({ orderId, amount, customerName, customerPhone }),
+        body: JSON.stringify({
+          orderId,
+          amount,
+          amountInPaise: Math.round((amount || 0) * 100),
+          customerName,
+          customerPhone,
+        }),
       },
       () => ({
         razorpayOrderId: 'order_rzp_' + Date.now(),
