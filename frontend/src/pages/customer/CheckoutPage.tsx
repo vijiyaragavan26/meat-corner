@@ -167,15 +167,16 @@ export const CheckoutPage: React.FC = () => {
         throw new Error(res.message || 'Order creation failed');
       }
 
-      const order = res.data;
+      const order = res.data || res;
+      const payableAmount = Number(order?.totalAmount) || Number(pricing?.total) || 125;
 
       // 2. Handle Razorpay Online Payment Flow
       if (paymentMethod === 'RAZORPAY') {
         const rzpRes = await api.createRazorpayOrder(
-          order.id,
-          order.totalAmount,
-          order.deliveryAddressSnapshot?.recipientName || user?.name || 'Customer',
-          order.deliveryAddressSnapshot?.phone || user?.phone || '+91 93607 61595'
+          order?.id || ('ord_' + Date.now()),
+          payableAmount,
+          order?.deliveryAddressSnapshot?.recipientName || user?.name || 'Customer',
+          order?.deliveryAddressSnapshot?.phone || user?.phone || '+91 93607 61595'
         );
         const razorpayKeyId =
           rzpRes.data?.keyId ||
@@ -191,7 +192,7 @@ export const CheckoutPage: React.FC = () => {
           await new Promise<void>((resolve, reject) => {
             const options: any = {
               key: razorpayKeyId,
-              amount: Math.round(order.totalAmount * 100),
+              amount: Math.round(payableAmount * 100),
               currency: 'INR',
               name: 'MPM Meat Corner',
               description: `Chicken Order #${order.orderNumber || order.id}`,
