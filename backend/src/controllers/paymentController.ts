@@ -1,19 +1,13 @@
 import { Response } from 'express';
 import crypto from 'crypto';
-import Razorpay from 'razorpay';
+import dns from 'dns';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { db } from '../db/dataStore';
 import { AuthenticatedRequest } from '../middleware/auth';
 
-let razorpayInstance: Razorpay | null = null;
-try {
-  razorpayInstance = new Razorpay({
-    key_id: config.razorpay.keyId,
-    key_secret: config.razorpay.keySecret
-  });
-} catch {
-  // Graceful fallback for mock mode
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
 }
 
 export const createRazorpayPaymentOrder = async (req: AuthenticatedRequest, res: Response) => {
@@ -41,23 +35,36 @@ export const createRazorpayPaymentOrder = async (req: AuthenticatedRequest, res:
 
     let razorpayOrderId = `order_rzp_${uuidv4().substring(0, 12)}`;
 
-    if (razorpayInstance && !config.razorpay.keyId.includes('test_meatcorner')) {
+    if (config.razorpay.keyId && !config.razorpay.keyId.includes('test_meatcorner')) {
       try {
-        const rzpOrder = await razorpayInstance.orders.create({
-          amount: amountInPaise,
-          currency: currency || 'INR',
-          receipt: String(receipt || orderNumber).substring(0, 40),
-          notes: {
-            orderId: String(orderId || orderNumber),
-            customerName: String(custName)
-          }
+        const auth = Buffer.from(`${config.razorpay.keyId}:${config.razorpay.keySecret}`).toString('base64');
+        const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Basic ${auth}`
+          },
+          body: JSON.stringify({
+            amount: amountInPaise,
+            currency: currency || 'INR',
+            receipt: String(receipt || orderNumber).substring(0, 40),
+            notes: {
+              orderId: String(orderId || orderNumber),
+              customerName: String(custName)
+            }
+          })
         });
-        razorpayOrderId = rzpOrder.id;
-      } catch (err: any) {
-        console.warn('Live Razorpay call error, using deterministic gateway order:', err.message);
-        if (err.statusCode === 401 || err.message?.includes('Authentication failed')) {
-          return res.status(401).json({ success: false, message: 'Razorpay authentication failed' });
+        const rzpData: any = await rzpRes.json();
+        if (rzpRes.ok && rzpData.id) {
+          razorpayOrderId = rzpData.id;
+        } else {
+          console.warn('Live Razorpay call error:', rzpData);
+          if (rzpRes.status === 401 || rzpData.error?.description?.includes('Authentication failed')) {
+            return res.status(401).json({ success: false, message: 'Razorpay authentication failed' });
+          }
         }
+      } catch (err: any) {
+        console.warn('Live Razorpay fetch error, using fallback:', err.message);
       }
     }
 

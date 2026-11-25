@@ -228,36 +228,9 @@ export const CheckoutPage: React.FC = () => {
               },
             };
 
-            // ONLY attach order_id and custom config if a genuine Razorpay server order was created
+            // Attach server-created order_id if valid
             if (hasValidServerOrderId) {
               options.order_id = rzpRes.data.razorpayOrderId;
-              options.config = {
-                display: {
-                  blocks: {
-                    upi: {
-                      name: 'Pay via UPI / QR / Apps',
-                      instruments: [
-                        {
-                          method: 'upi',
-                          apps: ['google_pay', 'phonepe', 'paytm', 'bhim'],
-                        },
-                      ],
-                    },
-                    other: {
-                      name: 'Cards, Netbanking & Wallets',
-                      instruments: [
-                        { method: 'card' },
-                        { method: 'netbanking' },
-                        { method: 'wallet' },
-                      ],
-                    },
-                  },
-                  sequence: ['block.upi', 'block.other'],
-                  preferences: {
-                    show_default_blocks: true,
-                  },
-                },
-              };
             }
 
             const rzp = new (window as any).Razorpay(options);
