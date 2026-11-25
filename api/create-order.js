@@ -3,8 +3,8 @@ if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_U4KkbgZrm2LkRT';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'nLEDJ78qXRn8jMuFT3Cvq2xj';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_live_U4LjWPaHTTaelg';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'u2IkQCj6UrLCh2icPW3sTu3C';
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
