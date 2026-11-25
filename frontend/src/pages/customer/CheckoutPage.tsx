@@ -180,7 +180,7 @@ export const CheckoutPage: React.FC = () => {
         const razorpayKeyId =
           rzpRes.data?.keyId ||
           (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ||
-          'rzp_test_U2oEDCqKO7xmJr';
+          'rzp_test_U4KkbgZrm2LkRT';
 
         if (typeof window !== 'undefined' && (window as any).Razorpay) {
           await new Promise<void>((resolve, reject) => {

@@ -1656,7 +1656,7 @@ export const api = {
         razorpayOrderId: 'order_rzp_' + Date.now(),
         amount: Math.round((amount || 345) * 100),
         currency: 'INR',
-        keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_U2oEDCqKO7xmJr',
+        keyId: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_U4KkbgZrm2LkRT',
       })
     ),
 

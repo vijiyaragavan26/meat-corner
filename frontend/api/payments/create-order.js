@@ -3,8 +3,8 @@ if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_U2oEDCqKO7xmJr';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '58QMwjgUA3n9hC4yGTVLwNQ0';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_U4KkbgZrm2LkRT';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'nLEDJ78qXRn8jMuFT3Cvq2xj';
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,15 +26,21 @@ module.exports = async function handler(req, res) {
         body = JSON.parse(body);
       } catch {}
     }
-    const { orderId, amount, customerName, customerPhone } = body || {};
+    const { orderId, amount, currency = 'INR', receipt, customerName, customerPhone } = body || {};
 
-    if (!orderId && !amount) {
-      return res.status(400).json({ success: false, message: 'Order ID or amount is required' });
+    // Calculate amount in paise (minimum 100 paise)
+    let amountInPaise = Number(amount);
+    if (amountInPaise === undefined || amountInPaise === null || isNaN(amountInPaise)) {
+      amountInPaise = 34500;
     }
 
-    const amountInPaise = Math.round((Number(amount) || 345) * 100);
+    if (amountInPaise < 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be at least 100 paise'
+      });
+    }
 
-    // Call official Razorpay Orders API
     const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
     const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
@@ -44,8 +50,8 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         amount: amountInPaise,
-        currency: 'INR',
-        receipt: String(orderId || 'rcpt_' + Date.now()).substring(0, 40),
+        currency: currency || 'INR',
+        receipt: String(receipt || orderId || 'rcpt_' + Date.now()).substring(0, 40),
         notes: {
           orderId: String(orderId || ''),
           customerName: String(customerName || 'Customer'),
@@ -57,16 +63,28 @@ module.exports = async function handler(req, res) {
     const data = await rzpRes.json();
     if (!rzpRes.ok) {
       console.error('Razorpay Orders API error:', data);
-      return res.status(rzpRes.status).json({
+      if (rzpRes.status === 401 || data.error?.description?.includes('Authentication failed')) {
+        return res.status(401).json({
+          success: false,
+          error: data.error?.description || 'Razorpay authentication failed. Verify API credentials.'
+        });
+      }
+      return res.status(500).json({
         success: false,
-        message: data.error?.description || 'Failed to create Razorpay order'
+        error: data.error?.description || 'Failed to create Razorpay order'
       });
     }
 
     return res.status(200).json({
       success: true,
+      order_id: data.id,
+      razorpayOrderId: data.id,
+      amount: data.amount,
+      currency: data.currency,
+      keyId: RAZORPAY_KEY_ID,
       data: {
-        orderId,
+        order_id: data.id,
+        orderId: orderId || data.id,
         razorpayOrderId: data.id,
         amount: data.amount,
         currency: data.currency,
@@ -75,6 +93,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (err) {
     console.error('Server error creating Razorpay order:', err);
-    return res.status(500).json({ success: false, message: err.message || 'Internal Server Error' });
+    return res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
   }
 };

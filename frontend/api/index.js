@@ -41395,8 +41395,8 @@ var config = {
   supabaseUrl: process.env.SUPABASE_URL || "https://ajiovbilwinoiyjvzhcv.supabase.co",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc",
   razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_U2oEDCqKO7xmJr",
-    keySecret: process.env.RAZORPAY_KEY_SECRET || "58QMwjgUA3n9hC4yGTVLwNQ0"
+    keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_U4KkbgZrm2LkRT",
+    keySecret: process.env.RAZORPAY_KEY_SECRET || "nLEDJ78qXRn8jMuFT3Cvq2xj"
   }
 };
 
@@ -47476,41 +47476,57 @@ try {
 }
 var createRazorpayPaymentOrder = async (req, res) => {
   try {
-    const { orderId } = req.body;
-    if (!orderId) {
-      return res.status(400).json({ success: false, message: "Order ID is required" });
+    const { orderId, amount, currency = "INR", receipt, customerName, customerPhone } = req.body || {};
+    const rawAmount = amount !== void 0 ? amount : req.body.amountInPaise;
+    let amountInPaise;
+    if (rawAmount !== void 0 && rawAmount !== null) {
+      const num = Number(rawAmount);
+      amountInPaise = num < 100 ? Math.round(num * 100) : Math.round(num);
+    } else {
+      const order2 = orderId ? db.getOrderById(orderId) : null;
+      amountInPaise = order2 ? Math.round(order2.totalAmount * 100) : 34500;
     }
-    const order = db.getOrderById(orderId);
-    const amountVal = order ? order.totalAmount : Number(req.body.amount) || 345;
-    const orderNumber = order?.orderNumber || (orderId.startsWith("MC-") ? orderId : `MC-${Date.now().toString().slice(-6)}`);
-    const custName = order?.customerName || req.body.customerName || "Customer";
-    const custPhone = order?.customerPhone || req.body.customerPhone || "+91 93607 61595";
-    const amountInPaise = Math.round(amountVal * 100);
+    if (!amountInPaise || amountInPaise < 100) {
+      return res.status(400).json({ success: false, message: "Amount must be at least 100 paise" });
+    }
+    const order = orderId ? db.getOrderById(orderId) : null;
+    const orderNumber = order?.orderNumber || (orderId && orderId.startsWith("MC-") ? orderId : `MC-${Date.now().toString().slice(-6)}`);
+    const custName = order?.customerName || customerName || "Customer";
+    const custPhone = order?.customerPhone || customerPhone || "+91 93607 61595";
     let razorpayOrderId = `order_rzp_${v4_default().substring(0, 12)}`;
     if (razorpayInstance && !config.razorpay.keyId.includes("test_meatcorner")) {
       try {
         const rzpOrder = await razorpayInstance.orders.create({
           amount: amountInPaise,
-          currency: "INR",
-          receipt: orderNumber.substring(0, 40),
+          currency: currency || "INR",
+          receipt: String(receipt || orderNumber).substring(0, 40),
           notes: {
-            orderId: String(orderId),
+            orderId: String(orderId || orderNumber),
             customerName: String(custName)
           }
         });
         razorpayOrderId = rzpOrder.id;
       } catch (err) {
         console.warn("Live Razorpay call error, using deterministic gateway order:", err.message);
+        if (err.statusCode === 401 || err.message?.includes("Authentication failed")) {
+          return res.status(401).json({ success: false, message: "Razorpay authentication failed" });
+        }
       }
     }
     return res.json({
       success: true,
+      order_id: razorpayOrderId,
+      razorpayOrderId,
+      amount: amountInPaise,
+      currency: currency || "INR",
+      keyId: config.razorpay.keyId,
       data: {
-        orderId,
+        order_id: razorpayOrderId,
+        orderId: orderId || razorpayOrderId,
         orderNumber,
         razorpayOrderId,
         amount: amountInPaise,
-        currency: "INR",
+        currency: currency || "INR",
         keyId: config.razorpay.keyId,
         customerName: custName,
         customerPhone: custPhone
@@ -47522,43 +47538,56 @@ var createRazorpayPaymentOrder = async (req, res) => {
 };
 var verifyRazorpayPayment = async (req, res) => {
   try {
-    const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
-    if (!orderId || !razorpayOrderId || !razorpayPaymentId) {
+    const {
+      orderId,
+      order_id,
+      razorpayOrderId,
+      razorpay_order_id,
+      paymentId,
+      payment_id,
+      razorpayPaymentId,
+      razorpay_payment_id,
+      signature,
+      razorpaySignature,
+      razorpay_signature
+    } = req.body || {};
+    const finalOrderId = razorpay_order_id || razorpayOrderId || order_id || "";
+    const finalPaymentId = razorpay_payment_id || razorpayPaymentId || payment_id || paymentId || "";
+    const finalSignature = razorpay_signature || razorpaySignature || signature || "";
+    const appOrderId = orderId || order_id || finalOrderId;
+    if (!finalOrderId || !finalPaymentId || !finalSignature) {
       return res.status(400).json({
         success: false,
-        message: "orderId, razorpayOrderId, and razorpayPaymentId are required"
+        message: "Missing required payment verification fields (order_id, payment_id, razorpay_signature)"
       });
     }
-    const order = db.getOrderById(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-    let isValid2 = false;
-    if (razorpaySignature) {
-      const generatedSignature = import_crypto3.default.createHmac("sha256", config.razorpay.keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
-      isValid2 = generatedSignature === razorpaySignature;
-    }
-    if (!isValid2 && (razorpaySignature?.startsWith("test_sig_") || config.razorpay.keyId.includes("test_meatcorner"))) {
+    const generatedSignature = import_crypto3.default.createHmac("sha256", config.razorpay.keySecret).update(`${finalOrderId}|${finalPaymentId}`).digest("hex");
+    let isValid2 = generatedSignature === finalSignature;
+    if (!isValid2 && (finalSignature?.startsWith("test_sig_") || config.razorpay.keyId.includes("test_meatcorner"))) {
       isValid2 = true;
     }
     if (!isValid2) {
       return res.status(400).json({
         success: false,
-        message: "Invalid payment signature. Verification failed. Possible tampering."
+        message: "Invalid payment signature. Verification failed."
       });
     }
-    order.paymentStatus = "PAID";
-    order.paymentMethod = "RAZORPAY";
-    order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    db.saveToDisk();
+    const order = appOrderId ? db.getOrderById(appOrderId) : null;
+    if (order) {
+      order.paymentStatus = "PAID";
+      order.paymentMethod = "RAZORPAY";
+      order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      db.saveToDisk();
+    }
     return res.json({
       success: true,
-      message: "Payment verified successfully! Order is now confirmed.",
+      message: "Payment verified successfully! Order is confirmed.",
       data: {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        paymentStatus: order.paymentStatus,
-        transactionId: razorpayPaymentId
+        orderId: appOrderId,
+        orderNumber: order?.orderNumber || appOrderId,
+        razorpayPaymentId: finalPaymentId,
+        razorpayOrderId: finalOrderId,
+        status: "CAPTURED"
       }
     });
   } catch (err) {
@@ -48369,6 +48398,8 @@ app.use("/api/orders", orderRoutes_default);
 app.use("/orders", orderRoutes_default);
 app.use("/api/payments", paymentRoutes_default);
 app.use("/payments", paymentRoutes_default);
+app.post(["/api/create-order", "/create-order"], optionalAuth, createRazorpayPaymentOrder);
+app.post(["/api/verify-payment", "/verify-payment"], optionalAuth, verifyRazorpayPayment);
 app.use("/api/delivery", deliveryRoutes_default);
 app.use("/delivery", deliveryRoutes_default);
 app.use("/api/admin", adminRoutes_default);

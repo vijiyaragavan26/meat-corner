@@ -18,18 +18,26 @@ try {
 
 export const createRazorpayPaymentOrder = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { orderId } = req.body;
-    if (!orderId) {
-      return res.status(400).json({ success: false, message: 'Order ID is required' });
+    const { orderId, amount, currency = 'INR', receipt, customerName, customerPhone } = req.body || {};
+
+    const rawAmount = amount !== undefined ? amount : req.body.amountInPaise;
+    let amountInPaise: number;
+    if (rawAmount !== undefined && rawAmount !== null) {
+      const num = Number(rawAmount);
+      amountInPaise = num < 100 ? Math.round(num * 100) : Math.round(num);
+    } else {
+      const order = orderId ? db.getOrderById(orderId) : null;
+      amountInPaise = order ? Math.round(order.totalAmount * 100) : 34500;
     }
 
-    const order = db.getOrderById(orderId);
-    const amountVal = order ? order.totalAmount : (Number(req.body.amount) || 345);
-    const orderNumber = order?.orderNumber || (orderId.startsWith('MC-') ? orderId : `MC-${Date.now().toString().slice(-6)}`);
-    const custName = order?.customerName || req.body.customerName || 'Customer';
-    const custPhone = order?.customerPhone || req.body.customerPhone || '+91 93607 61595';
+    if (!amountInPaise || amountInPaise < 100) {
+      return res.status(400).json({ success: false, message: 'Amount must be at least 100 paise' });
+    }
 
-    const amountInPaise = Math.round(amountVal * 100);
+    const order = orderId ? db.getOrderById(orderId) : null;
+    const orderNumber = order?.orderNumber || (orderId && orderId.startsWith('MC-') ? orderId : `MC-${Date.now().toString().slice(-6)}`);
+    const custName = order?.customerName || customerName || 'Customer';
+    const custPhone = order?.customerPhone || customerPhone || '+91 93607 61595';
 
     let razorpayOrderId = `order_rzp_${uuidv4().substring(0, 12)}`;
 
@@ -37,27 +45,36 @@ export const createRazorpayPaymentOrder = async (req: AuthenticatedRequest, res:
       try {
         const rzpOrder = await razorpayInstance.orders.create({
           amount: amountInPaise,
-          currency: 'INR',
-          receipt: orderNumber.substring(0, 40),
+          currency: currency || 'INR',
+          receipt: String(receipt || orderNumber).substring(0, 40),
           notes: {
-            orderId: String(orderId),
+            orderId: String(orderId || orderNumber),
             customerName: String(custName)
           }
         });
         razorpayOrderId = rzpOrder.id;
       } catch (err: any) {
         console.warn('Live Razorpay call error, using deterministic gateway order:', err.message);
+        if (err.statusCode === 401 || err.message?.includes('Authentication failed')) {
+          return res.status(401).json({ success: false, message: 'Razorpay authentication failed' });
+        }
       }
     }
 
     return res.json({
       success: true,
+      order_id: razorpayOrderId,
+      razorpayOrderId,
+      amount: amountInPaise,
+      currency: currency || 'INR',
+      keyId: config.razorpay.keyId,
       data: {
-        orderId,
+        order_id: razorpayOrderId,
+        orderId: orderId || razorpayOrderId,
         orderNumber,
         razorpayOrderId,
         amount: amountInPaise,
-        currency: 'INR',
+        currency: currency || 'INR',
         keyId: config.razorpay.keyId,
         customerName: custName,
         customerPhone: custPhone
@@ -70,35 +87,44 @@ export const createRazorpayPaymentOrder = async (req: AuthenticatedRequest, res:
 
 export const verifyRazorpayPayment = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const {
+      orderId,
+      order_id,
+      razorpayOrderId,
+      razorpay_order_id,
+      paymentId,
+      payment_id,
+      razorpayPaymentId,
+      razorpay_payment_id,
+      signature,
+      razorpaySignature,
+      razorpay_signature
+    } = req.body || {};
 
-    if (!orderId || !razorpayOrderId || !razorpayPaymentId) {
+    const finalOrderId = razorpay_order_id || razorpayOrderId || order_id || '';
+    const finalPaymentId = razorpay_payment_id || razorpayPaymentId || payment_id || paymentId || '';
+    const finalSignature = razorpay_signature || razorpaySignature || signature || '';
+    const appOrderId = orderId || order_id || finalOrderId;
+
+    if (!finalOrderId || !finalPaymentId || !finalSignature) {
       return res.status(400).json({
         success: false,
-        message: 'orderId, razorpayOrderId, and razorpayPaymentId are required'
+        message: 'Missing required payment verification fields (order_id, payment_id, razorpay_signature)'
       });
     }
 
-    const order = db.getOrderById(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
+    // Server-side HMAC SHA256 Signature Verification: order_id + "|" + payment_id
+    const generatedSignature = crypto
+      .createHmac('sha256', config.razorpay.keySecret)
+      .update(`${finalOrderId}|${finalPaymentId}`)
+      .digest('hex');
 
-    // Server-side HMAC SHA256 Signature Verification
-    let isValid = false;
-    if (razorpaySignature) {
-      const generatedSignature = crypto
-        .createHmac('sha256', config.razorpay.keySecret)
-        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-        .digest('hex');
-
-      isValid = generatedSignature === razorpaySignature;
-    }
+    let isValid = generatedSignature === finalSignature;
 
     // In sandbox test environments without real Razorpay callback webhooks, accept test signature prefix or valid HMAC
     if (
       !isValid &&
-      (razorpaySignature?.startsWith('test_sig_') || config.razorpay.keyId.includes('test_meatcorner'))
+      (finalSignature?.startsWith('test_sig_') || config.razorpay.keyId.includes('test_meatcorner'))
     ) {
       isValid = true;
     }
@@ -106,25 +132,27 @@ export const verifyRazorpayPayment = async (req: AuthenticatedRequest, res: Resp
     if (!isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid payment signature. Verification failed. Possible tampering.'
+        message: 'Invalid payment signature. Verification failed.'
       });
     }
 
-    // Update Order & Payment Status securely
-    order.paymentStatus = 'PAID';
-    order.paymentMethod = 'RAZORPAY';
-    order.updatedAt = new Date().toISOString();
-
-    db.saveToDisk();
+    const order = appOrderId ? db.getOrderById(appOrderId) : null;
+    if (order) {
+      order.paymentStatus = 'PAID';
+      order.paymentMethod = 'RAZORPAY';
+      order.updatedAt = new Date().toISOString();
+      db.saveToDisk();
+    }
 
     return res.json({
       success: true,
-      message: 'Payment verified successfully! Order is now confirmed.',
+      message: 'Payment verified successfully! Order is confirmed.',
       data: {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        paymentStatus: order.paymentStatus,
-        transactionId: razorpayPaymentId
+        orderId: appOrderId,
+        orderNumber: order?.orderNumber || appOrderId,
+        razorpayPaymentId: finalPaymentId,
+        razorpayOrderId: finalOrderId,
+        status: 'CAPTURED'
       }
     });
   } catch (err: any) {
