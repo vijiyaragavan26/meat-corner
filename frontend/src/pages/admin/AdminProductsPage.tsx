@@ -21,6 +21,7 @@ export const AdminProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,6 +40,12 @@ export const AdminProductsPage: React.FC = () => {
   const [isRecommended, setIsRecommended] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    if (!toastMsg) return;
+    const timer = setTimeout(() => setToastMsg(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toastMsg]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -46,8 +53,13 @@ export const AdminProductsPage: React.FC = () => {
         api.getProducts(),
         api.getCategories()
       ]);
-      if (prodRes.success) setProducts(prodRes.data);
-      if (catRes.success) setCategories(catRes.data);
+      if (prodRes && prodRes.success) setProducts(prodRes.data || []);
+      else if (Array.isArray(prodRes)) setProducts(prodRes);
+
+      if (catRes && catRes.success) setCategories(catRes.data || []);
+      else if (Array.isArray(catRes)) setCategories(catRes);
+    } catch (err) {
+      console.error('Failed to load products:', err);
     } finally {
       setLoading(false);
     }
@@ -60,7 +72,7 @@ export const AdminProductsPage: React.FC = () => {
   const openAddModal = () => {
     setEditingProduct(null);
     setName('');
-    setCategoryId(categories[0]?.id || '');
+    setCategoryId(categories[0]?.id || 'cat_curry');
     setBasePrice(250);
     setDiscountPercent(0);
     setDescription('Fresh farm-raised chicken cut and packed hygienically.');
@@ -74,36 +86,44 @@ export const AdminProductsPage: React.FC = () => {
 
   const openEditModal = (p: Product) => {
     setEditingProduct(p);
-    setName(p.name);
-    setCategoryId(p.categoryId);
-    setBasePrice(p.basePrice);
-    setDiscountPercent(p.discountPercent);
-    setDescription(p.description);
+    setName(p.name || '');
+    setCategoryId(p.categoryId || categories[0]?.id || 'cat_curry');
+    setBasePrice(p.basePrice || 250);
+    setDiscountPercent(p.discountPercent || 0);
+    setDescription(p.description || '');
     setShortDescription(p.shortDescription || '');
-    setImageUrl(p.images[0] || '');
-    setIsBestSeller(p.isBestSeller);
-    setIsTodaySpecial(p.isTodaySpecial);
-    setIsRecommended(p.isRecommended);
+    setImageUrl(p.images?.[0] || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80');
+    setIsBestSeller(Boolean(p.isBestSeller));
+    setIsTodaySpecial(Boolean(p.isTodaySpecial));
+    setIsRecommended(Boolean(p.isRecommended));
     setIsModalOpen(true);
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !categoryId || !basePrice) {
-      alert('Name, category, and base price are required.');
+    if (!name.trim()) {
+      alert('Please enter a product cut name.');
+      return;
+    }
+    if (!categoryId) {
+      alert('Please select a chicken category.');
+      return;
+    }
+    if (!basePrice || basePrice <= 0) {
+      alert('Please enter a valid base price per kg.');
       return;
     }
 
     setIsSaving(true);
     try {
       const payload: any = {
-        name,
+        name: name.trim(),
         categoryId,
         basePrice: Number(basePrice),
-        discountPercent: Number(discountPercent),
-        description,
-        shortDescription,
-        images: [imageUrl || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
+        discountPercent: Number(discountPercent || 0),
+        description: description.trim() || 'Fresh farm-raised chicken cut and packed hygienically.',
+        shortDescription: shortDescription.trim() || '100% farm fresh chicken cut on order.',
+        images: [imageUrl.trim() || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
         isBestSeller,
         isTodaySpecial,
         isRecommended
@@ -111,14 +131,25 @@ export const AdminProductsPage: React.FC = () => {
 
       if (editingProduct) {
         const res = await api.updateAdminProduct(editingProduct.id, payload);
-        if (res.success) {
-          setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? res.data : p)));
-        }
+        const updatedProd: Product = {
+          ...editingProduct,
+          ...payload,
+          id: editingProduct.id,
+          variants: editingProduct.variants || [
+            { id: `var_${editingProduct.id}_500g`, productId: editingProduct.id, label: '500g', weightGrams: 500, price: Math.round(Number(basePrice) * 0.52), sku: `MC-${editingProduct.id}-500G`, isActive: true },
+            { id: `var_${editingProduct.id}_1kg`, productId: editingProduct.id, label: '1kg', weightGrams: 1000, price: Number(basePrice), sku: `MC-${editingProduct.id}-1KG`, isActive: true }
+          ]
+        };
+        setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updatedProd : p)));
+        setToastMsg(`"${name.trim()}" updated successfully!`);
       } else {
         const res = await api.createAdminProduct(payload);
-        if (res.success) {
-          setProducts((prev) => [res.data, ...prev]);
-        }
+        const newProd: Product = res?.data || res || {
+          ...payload,
+          id: 'prod_' + Date.now()
+        };
+        setProducts((prev) => [newProd, ...prev]);
+        setToastMsg(`"${name.trim()}" added to chicken catalog!`);
       }
       setIsModalOpen(false);
     } catch (err: any) {
@@ -128,12 +159,13 @@ export const AdminProductsPage: React.FC = () => {
     }
   };
 
-  const handleDeleteProduct = async (id: string) => {
-    if (!confirm('Are you sure you want to deactivate this chicken product?')) return;
+  const handleDeleteProduct = async (id: string, prodName: string) => {
+    if (!confirm(`Are you sure you want to deactivate "${prodName}" from the chicken catalog?`)) return;
     try {
       const res = await api.deleteAdminProduct(id);
       if (res.success) {
         setProducts((prev) => prev.filter((p) => p.id !== id));
+        setToastMsg(`"${prodName}" has been deactivated.`);
       }
     } catch (err: any) {
       alert(err.message || 'Deactivation failed');
@@ -150,7 +182,14 @@ export const AdminProductsPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Toast Alert */}
+      {toastMsg && (
+        <div className="fixed top-20 right-6 z-[110] bg-emerald-600 text-white font-bold text-xs px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -255,16 +294,18 @@ export const AdminProductsPage: React.FC = () => {
               {/* Action Buttons */}
               <div className="p-4 pt-0 border-t border-gray-50 flex justify-between items-center mt-2">
                 <button
+                  type="button"
                   onClick={() => openEditModal(product)}
-                  className="text-xs font-bold text-charcoal hover:text-brand-700 flex items-center space-x-1"
+                  className="text-xs font-bold text-charcoal hover:text-brand-700 flex items-center space-x-1 py-1 px-2 rounded-lg hover:bg-gray-50 transition"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                   <span>Edit Cut</span>
                 </button>
 
                 <button
-                  onClick={() => handleDeleteProduct(product.id)}
-                  className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center space-x-1"
+                  type="button"
+                  onClick={() => handleDeleteProduct(product.id, product.name)}
+                  className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center space-x-1 py-1 px-2 rounded-lg hover:bg-red-50 transition"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Deactivate</span>
@@ -277,18 +318,19 @@ export const AdminProductsPage: React.FC = () => {
 
       {/* Add / Edit Product Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative border border-gray-100 max-h-[90vh] overflow-y-auto space-y-5">
             <button
+              type="button"
               onClick={() => setIsModalOpen(false)}
-              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-charcoal"
+              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-charcoal transition"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div>
               <h3 className="text-xl font-black text-charcoal">
-                {editingProduct ? 'Edit Chicken Product' : 'Add New Chicken Cut'}
+                {editingProduct ? 'Edit Chicken Cut' : 'Add New Chicken Cut'}
               </h3>
               <p className="text-xs text-gray-500">Chicken-only fresh meat product catalog</p>
             </div>
@@ -314,11 +356,20 @@ export const AdminProductsPage: React.FC = () => {
                     onChange={(e) => setCategoryId(e.target.value)}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    {categories.length > 0 ? (
+                      categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="cat_curry">Curry Cut Chicken</option>
+                        <option value="cat_boneless">Boneless Chicken</option>
+                        <option value="cat_breast">Chicken Breast</option>
+                        <option value="cat_leg">Chicken Leg</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -327,6 +378,7 @@ export const AdminProductsPage: React.FC = () => {
                   <input
                     type="number"
                     required
+                    min={1}
                     value={basePrice}
                     onChange={(e) => setBasePrice(Number(e.target.value))}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
@@ -339,6 +391,8 @@ export const AdminProductsPage: React.FC = () => {
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Discount %</label>
                   <input
                     type="number"
+                    min={0}
+                    max={90}
                     value={discountPercent}
                     onChange={(e) => setDiscountPercent(Number(e.target.value))}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
@@ -351,10 +405,26 @@ export const AdminProductsPage: React.FC = () => {
                     type="text"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
                   />
                 </div>
               </div>
+
+              {/* Live Image Preview */}
+              {imageUrl && (
+                <div className="flex items-center space-x-3 bg-gray-50 p-2.5 rounded-2xl border border-gray-100">
+                  <img
+                    src={imageUrl}
+                    alt="Preview"
+                    className="w-12 h-12 rounded-xl object-cover border border-gray-200"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=200&q=80';
+                    }}
+                  />
+                  <span className="text-[11px] text-gray-500 font-medium truncate flex-1">Image Preview</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Short Description</label>
@@ -399,13 +469,23 @@ export const AdminProductsPage: React.FC = () => {
                 </label>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg text-xs uppercase tracking-wider transition"
-              >
-                {isSaving ? 'Saving Chicken Cut...' : editingProduct ? 'Update Product' : 'Create Chicken Cut'}
-              </button>
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="w-1/3 bg-gray-100 hover:bg-gray-200 text-charcoal font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-black py-3.5 rounded-xl shadow-lg text-xs uppercase tracking-wider transition"
+                >
+                  {isSaving ? 'Saving Chicken Cut...' : editingProduct ? 'Update Product' : 'Create Chicken Cut'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

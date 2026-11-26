@@ -179,6 +179,81 @@ function isCustomerDeleted(c: any, deletedKeys: Set<string>): boolean {
   return false;
 }
 
+// Local Product Persistence & Override Engine
+function getCustomProducts(): any[] {
+  try {
+    const raw = localStorage.getItem('meat_corner_custom_products');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomProducts(products: any[]) {
+  try {
+    localStorage.setItem('meat_corner_custom_products', JSON.stringify(products));
+  } catch {}
+}
+
+function getProductOverrides(): Record<string, any> {
+  try {
+    const raw = localStorage.getItem('meat_corner_product_overrides');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveProductOverrides(overrides: Record<string, any>) {
+  try {
+    localStorage.setItem('meat_corner_product_overrides', JSON.stringify(overrides));
+  } catch {}
+}
+
+function getDeletedProductIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem('meat_corner_deleted_product_ids');
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDeletedProductIds(set: Set<string>) {
+  try {
+    localStorage.setItem('meat_corner_deleted_product_ids', JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+function mergeProductsWithLocalStore(baseProducts: any[]): any[] {
+  const overrides = getProductOverrides();
+  const deletedIds = getDeletedProductIds();
+  const customProducts = getCustomProducts();
+
+  const processedBase = (baseProducts || [])
+    .filter((p) => p && !deletedIds.has(p.id))
+    .map((p) => {
+      const ov = overrides[p.id];
+      if (ov) {
+        return { ...p, ...ov, id: p.id };
+      }
+      return p;
+    });
+
+  const processedCustom = (customProducts || [])
+    .filter((p) => p && !deletedIds.has(p.id))
+    .map((p) => {
+      const ov = overrides[p.id];
+      if (ov) {
+        return { ...p, ...ov, id: p.id };
+      }
+      return p;
+    });
+
+  const customIds = new Set(processedCustom.map((p) => p.id));
+  return [...processedCustom, ...processedBase.filter((p) => !customIds.has(p.id))];
+}
+
 async function syncUserToSupabase(user: any, passwordHash?: string) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/Users`, {
@@ -1407,16 +1482,45 @@ export const api = {
       `/products${params ? '?' + new URLSearchParams(params).toString() : ''}`,
       {},
       () => {
-        if (params?.categoryId) {
-          return DEMO_PRODUCTS.filter((p) => p.categoryId === params.categoryId);
+        let prods = mergeProductsWithLocalStore(DEMO_PRODUCTS);
+        if (params?.categoryId && params.categoryId !== 'ALL') {
+          prods = prods.filter((p) => p.categoryId === params.categoryId);
         }
-        return DEMO_PRODUCTS;
+        return prods;
       }
-    ),
+    ).then((res: any) => {
+      if (res && res.data && Array.isArray(res.data)) {
+        const merged = mergeProductsWithLocalStore(res.data);
+        return {
+          ...res,
+          data: params?.categoryId && params.categoryId !== 'ALL'
+            ? merged.filter((p: any) => p.categoryId === params.categoryId)
+            : merged,
+          count: merged.length
+        };
+      }
+      if (Array.isArray(res)) {
+        const merged = mergeProductsWithLocalStore(res);
+        return params?.categoryId && params.categoryId !== 'ALL'
+          ? merged.filter((p: any) => p.categoryId === params.categoryId)
+          : merged;
+      }
+      return res;
+    }),
 
   getProductById: (id: string) =>
     callApi(`/products/${id}`, {}, () => {
-      return DEMO_PRODUCTS.find((p) => p.id === id) || DEMO_PRODUCTS[0];
+      const all = mergeProductsWithLocalStore(DEMO_PRODUCTS);
+      return all.find((p) => p.id === id) || all[0];
+    }).then((res: any) => {
+      if (res && res.data) {
+        const overrides = getProductOverrides();
+        const ov = overrides[id];
+        if (ov) {
+          return { ...res, data: { ...res.data, ...ov, id } };
+        }
+      }
+      return res;
     }),
 
   // Cart
@@ -2344,18 +2448,99 @@ export const api = {
       }
     ),
 
-  createAdminProduct: (body: any) =>
-    callApi('/admin/products', { method: 'POST', body: JSON.stringify(body) }, () => {
-      const newProd = { id: 'prod_' + Date.now(), ...body };
-      DEMO_PRODUCTS.unshift(newProd);
-      return newProd;
-    }),
+  createAdminProduct: (body: any) => {
+    const id = body.id || 'prod_cut_' + Date.now();
+    const basePrice = Number(body.basePrice || 250);
+    const slug = (body.name || 'chicken-cut')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '') + '-' + Math.floor(100 + Math.random() * 900);
 
-  updateAdminProduct: (id: string, body: any) =>
-    callApi('/admin/products/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => body),
+    const newProd = {
+      id,
+      slug,
+      name: body.name,
+      categoryId: body.categoryId,
+      basePrice,
+      discountPercent: Number(body.discountPercent || 0),
+      description: body.description || 'Fresh farm-raised chicken cut and packed hygienically.',
+      shortDescription: body.shortDescription || '100% farm fresh chicken cut on order.',
+      images: body.images && body.images.length ? body.images : ['https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
+      isBestSeller: Boolean(body.isBestSeller),
+      isTodaySpecial: Boolean(body.isTodaySpecial),
+      isRecommended: Boolean(body.isRecommended),
+      freshnessInfo: body.freshnessInfo || 'Fresh daily farm harvest, Halal certified, zero antibiotics.',
+      cuttingOptions: body.cuttingOptions || ['Curry Cut (Small)', 'Curry Cut (Medium)', 'Large Biryani Cut'],
+      cleaningOptions: body.cleaningOptions || ['Standard Clean & Washed', 'Extra Washed with Turmeric'],
+      variants: body.variants || [
+        { id: `var_${id}_500g`, productId: id, label: '500g', weightGrams: 500, price: Math.round(basePrice * 0.52), sku: `MC-${id}-500G`, isActive: true },
+        { id: `var_${id}_1kg`, productId: id, label: '1kg', weightGrams: 1000, price: basePrice, sku: `MC-${id}-1KG`, isActive: true }
+      ],
+      isActive: true,
+      avgRating: 4.9,
+      reviewCount: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
 
-  deleteAdminProduct: (id: string) =>
-    callApi('/admin/products/' + id, { method: 'DELETE' }, () => ({ success: true })),
+    // 1. Save to local storage cache so it persists permanently on live site
+    const custom = getCustomProducts();
+    saveCustomProducts([newProd, ...custom.filter((p: any) => p.id !== id)]);
+
+    // 2. Unshift into in-memory store
+    DEMO_PRODUCTS.unshift(newProd);
+
+    // 3. Sync to API backend
+    return callApi('/admin/products', { method: 'POST', body: JSON.stringify(newProd) }, () => newProd);
+  },
+
+  updateAdminProduct: (id: string, body: any) => {
+    // 1. Update in local overrides cache so edits persist permanently
+    const overrides = getProductOverrides();
+    overrides[id] = { ...(overrides[id] || {}), ...body, id, updatedAt: new Date().toISOString() };
+    saveProductOverrides(overrides);
+
+    // 2. Also update in custom products if present
+    const custom = getCustomProducts();
+    const cIdx = custom.findIndex((p: any) => p.id === id);
+    if (cIdx !== -1) {
+      custom[cIdx] = { ...custom[cIdx], ...body, id, updatedAt: new Date().toISOString() };
+      saveCustomProducts(custom);
+    }
+
+    // 3. Update in DEMO_PRODUCTS
+    const dIdx = DEMO_PRODUCTS.findIndex((p) => p.id === id);
+    if (dIdx !== -1) {
+      DEMO_PRODUCTS[dIdx] = { ...DEMO_PRODUCTS[dIdx], ...body, id, updatedAt: new Date().toISOString() };
+    }
+
+    const merged = { ...body, id };
+    return callApi('/admin/products/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => merged);
+  },
+
+  deleteAdminProduct: (id: string) => {
+    // 1. Mark as deleted in local storage
+    const deleted = getDeletedProductIds();
+    deleted.add(id);
+    saveDeletedProductIds(deleted);
+
+    // 2. Remove from custom products
+    const custom = getCustomProducts().filter((p: any) => p.id !== id);
+    saveCustomProducts(custom);
+
+    // 3. Remove overrides
+    const overrides = getProductOverrides();
+    delete overrides[id];
+    saveProductOverrides(overrides);
+
+    // 4. Update DEMO_PRODUCTS
+    const dIdx = DEMO_PRODUCTS.findIndex((p) => p.id === id);
+    if (dIdx !== -1) {
+      DEMO_PRODUCTS[dIdx].isActive = false;
+    }
+
+    return callApi('/admin/products/' + id, { method: 'DELETE' }, () => ({ success: true, message: 'Product deactivated' }));
+  },
 
   createAdminCategory: (body: any) =>
     callApi('/admin/categories', { method: 'POST', body: JSON.stringify(body) }, () => {

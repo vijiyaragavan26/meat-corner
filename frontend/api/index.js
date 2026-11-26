@@ -34957,6 +34957,7 @@ var adminCreateProduct = (req, res) => {
         }
       );
     }
+    db.saveToDisk();
     return res.status(201).json({ success: true, message: "Chicken product created successfully", data: newProduct });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message || "Failed to create product" });
@@ -34975,6 +34976,7 @@ var adminUpdateProduct = (req, res) => {
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   db.products[prodIndex] = updated;
+  db.saveToDisk();
   return res.json({ success: true, message: "Product updated successfully", data: updated });
 };
 var adminDeleteProduct = (req, res) => {
@@ -34985,6 +34987,7 @@ var adminDeleteProduct = (req, res) => {
   }
   prod.isActive = false;
   prod.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  db.saveToDisk();
   return res.json({ success: true, message: "Product deactivated successfully" });
 };
 var adminCreateCategory = (req, res) => {
@@ -35014,6 +35017,7 @@ var adminCreateCategory = (req, res) => {
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   db.categories.push(newCat);
+  db.saveToDisk();
   return res.status(201).json({ success: true, message: "Chicken category created successfully", data: newCat });
 };
 var adminUpdateCategory = (req, res) => {
@@ -35023,6 +35027,7 @@ var adminUpdateCategory = (req, res) => {
     return res.status(404).json({ success: false, message: "Category not found" });
   }
   Object.assign(cat, req.body, { updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  db.saveToDisk();
   return res.json({ success: true, message: "Category updated successfully", data: cat });
 };
 

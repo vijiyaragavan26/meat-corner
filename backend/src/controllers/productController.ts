@@ -97,6 +97,7 @@ export const adminCreateProduct = (req: AuthenticatedRequest, res: Response) => 
     };
 
     db.products.push(newProduct);
+    db.saveToDisk();
 
     // Variants
     if (variants && Array.isArray(variants) && variants.length > 0) {
@@ -197,6 +198,7 @@ export const adminUpdateProduct = (req: AuthenticatedRequest, res: Response) => 
   };
 
   db.products[prodIndex] = updated;
+  db.saveToDisk();
   return res.json({ success: true, message: 'Product updated successfully', data: updated });
 };
 
@@ -208,6 +210,7 @@ export const adminDeleteProduct = (req: AuthenticatedRequest, res: Response) => 
   }
   prod.isActive = false;
   prod.updatedAt = new Date().toISOString();
+  db.saveToDisk();
   return res.json({ success: true, message: 'Product deactivated successfully' });
 };
 
@@ -244,6 +247,7 @@ export const adminCreateCategory = (req: AuthenticatedRequest, res: Response) =>
   };
 
   db.categories.push(newCat);
+  db.saveToDisk();
   return res.status(201).json({ success: true, message: 'Chicken category created successfully', data: newCat });
 };
 
@@ -254,5 +258,6 @@ export const adminUpdateCategory = (req: AuthenticatedRequest, res: Response) =>
     return res.status(404).json({ success: false, message: 'Category not found' });
   }
   Object.assign(cat, req.body, { updatedAt: new Date().toISOString() });
+  db.saveToDisk();
   return res.json({ success: true, message: 'Category updated successfully', data: cat });
 };
