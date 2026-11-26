@@ -151,14 +151,21 @@ export const Header: React.FC = () => {
               )}
             </button>
 
-            {/* User Account / Login */}
+            {/* User Account / Profile & Integrated Mobile Menu Trigger */}
             {user ? (
               <div className="relative">
                 <button
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center space-x-2 p-1.5 rounded-xl hover:bg-gray-100 transition border border-gray-200"
+                  onClick={() => {
+                    if (window.innerWidth < 768) {
+                      setIsMobileMenuOpen(!isMobileMenuOpen);
+                    } else {
+                      setIsUserMenuOpen(!isUserMenuOpen);
+                    }
+                  }}
+                  className="flex items-center space-x-1.5 sm:space-x-2 p-1 sm:p-1.5 rounded-xl hover:bg-gray-100 transition border border-gray-200"
+                  aria-label="User account and navigation menu"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-charcoal text-white flex items-center justify-center font-bold text-sm">
+                  <div className="w-8 h-8 rounded-lg bg-charcoal text-white flex items-center justify-center font-bold text-sm shadow-sm">
                     {user.name.charAt(0)}
                   </div>
                   <span className="text-xs font-semibold hidden md:inline max-w-[100px] truncate">
@@ -167,8 +174,9 @@ export const Header: React.FC = () => {
                   <ChevronDown className="w-3.5 h-3.5 text-gray-500 hidden md:inline" />
                 </button>
 
+                {/* Desktop dropdown */}
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="hidden md:block absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="px-4 py-2.5 border-b border-gray-100">
                       <p className="text-xs text-gray-400 uppercase font-bold">Signed in as</p>
                       <p className="text-sm font-bold text-charcoal truncate">{user.name}</p>
@@ -221,29 +229,76 @@ export const Header: React.FC = () => {
                 )}
               </div>
             ) : (
-              <Link
-                to="/login"
-                className="flex items-center text-sm font-semibold text-gray-700 hover:text-brand-700 bg-gray-50 hover:bg-gray-100 px-3.5 py-2 rounded-xl transition border border-gray-200"
+              <button
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setIsMobileMenuOpen(!isMobileMenuOpen);
+                  } else {
+                    navigate('/login');
+                  }
+                }}
+                className="flex items-center text-sm font-semibold text-gray-700 hover:text-brand-700 bg-gray-50 hover:bg-gray-100 p-2 sm:px-3.5 sm:py-2 rounded-xl transition border border-gray-200"
+                aria-label="Account and menu"
               >
                 <UserIcon className="w-4 h-4 sm:mr-1.5" />
                 <span className="hidden sm:inline">{t('login_signup')}</span>
-              </Link>
+              </button>
             )}
-
-            {/* Mobile menu toggle */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-gray-600 hover:text-brand-700"
-            >
-              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Drawer Navigation */}
+      {/* Mobile Drawer Navigation (Integrated into Account/Menu) */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-3 animate-in fade-in slide-in-from-top-2">
+        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-3.5 animate-in fade-in slide-in-from-top-2">
+          {/* User Profile Header or Guest Login Banner */}
+          {user ? (
+            <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 flex items-center justify-between">
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-charcoal text-white flex items-center justify-center font-bold text-sm shadow flex-shrink-0">
+                  {user.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-charcoal truncate">{user.name}</p>
+                  <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
+                  {user.role === 'ADMIN' && (
+                    <span className="inline-block mt-0.5 text-[9px] font-bold uppercase bg-brand-100 text-brand-800 px-1.5 py-0.5 rounded">
+                      Super Administrator
+                    </span>
+                  )}
+                  {user.role === 'DELIVERY_PARTNER' && (
+                    <span className="inline-block mt-0.5 text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                      Delivery Partner
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-charcoal hover:bg-gray-200 transition"
+                aria-label="Close menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between bg-gray-50 p-3 rounded-2xl border border-gray-200">
+              <Link
+                to="/login"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex items-center space-x-2 text-xs font-bold text-brand-700 hover:underline"
+              >
+                <UserIcon className="w-4 h-4" />
+                <span>{t('login_signup')} / Account</span>
+              </Link>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-1 text-gray-400 hover:text-charcoal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           {/* Language Switcher Grid */}
           <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-2xl">
             <button
@@ -298,6 +353,26 @@ export const Header: React.FC = () => {
           </button>
 
           <div className="pt-2 border-t border-gray-100 flex flex-col space-y-2">
+            {user?.role === 'ADMIN' && (
+              <Link
+                to="/admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="px-3 py-2.5 text-sm font-bold text-brand-700 bg-brand-50 rounded-xl flex items-center space-x-2 border border-brand-200"
+              >
+                <Shield className="w-4 h-4 text-brand-700" />
+                <span>Admin Operations Hub</span>
+              </Link>
+            )}
+            {user?.role === 'DELIVERY_PARTNER' && (
+              <Link
+                to="/delivery"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="px-3 py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-xl flex items-center space-x-2 border border-emerald-200"
+              >
+                <Bike className="w-4 h-4 text-emerald-700" />
+                <span>Delivery Partner Dashboard</span>
+              </Link>
+            )}
             <Link
               to="/cuts"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -308,16 +383,18 @@ export const Header: React.FC = () => {
             <Link
               to="/products"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg flex items-center space-x-2"
             >
-              {t('explore_menu')}
+              <Package className="w-4 h-4 text-gray-400" />
+              <span>{t('explore_menu')}</span>
             </Link>
             <Link
               to="/account"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg flex items-center space-x-2"
             >
-              {t('my_orders')}
+              <UserIcon className="w-4 h-4 text-gray-400" />
+              <span>{t('my_orders')}</span>
             </Link>
           </div>
         </div>
