@@ -81,7 +81,7 @@ export const adminCreateProduct = (req: AuthenticatedRequest, res: Response) => 
       description: description || 'Fresh farm-raised chicken cut and packed hygienically.',
       shortDescription: shortDescription || '100% farm fresh chicken cut on order.',
       images: images && images.length ? images : ['https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
-      freshnessInfo: freshnessInfo || 'Fresh daily farm harvest, Halal certified, zero antibiotics.',
+      freshnessInfo: freshnessInfo || 'Fresh daily farm harvest, freshly cut, zero antibiotics.',
       cuttingOptions: cuttingOptions || ['Curry Cut (Small)', 'Curry Cut (Medium)', 'Large Biryani Cut'],
       cleaningOptions: cleaningOptions || ['Standard Clean & Washed', 'Extra Washed with Turmeric'],
       basePrice: Number(basePrice),

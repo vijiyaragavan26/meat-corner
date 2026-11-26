@@ -151,7 +151,7 @@ export const DEMO_PRODUCTS: Product[] = [
     description: 'Fresh, juicy, bone-in chicken cuts trimmed meticulously without skin. Perfect balance of succulent leg, breast, and wing portions for South Indian chicken curry.',
     shortDescription: 'Juicy bone-in curry cut pieces, 100% skinless and farm-fresh.',
     images: ['https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
-    freshnessInfo: 'Antibiotic residue free, Halal certified, cut fresh post-order.',
+    freshnessInfo: 'Antibiotic residue free, freshly cut post-order.',
     cuttingOptions: [
       'Curry Cut (Medium)',
       'Curry Cut (Small)',

@@ -19,7 +19,7 @@ const translations: Record<Language, Record<string, string>> = {
     todays_offers: "Today's Fresh Offers",
     recommended: 'Recommended For You',
     why_us: 'Why Choose Meat Corner?',
-    hygiene_title: '100% Halal Certified & Farm-Fresh Standards',
+    hygiene_title: '100% Farm-Fresh & Hygienic Standards',
     hygiene_sub: 'Zero antibiotics, zero chemical washes, freshly harvested and chilled under 4°C.',
     add_to_cart: 'Add to Cart',
     added: 'Added',

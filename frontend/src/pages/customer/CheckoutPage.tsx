@@ -594,7 +594,7 @@ export const CheckoutPage: React.FC = () => {
 
             <div className="flex items-center justify-center space-x-2 text-[10px] text-gray-400 font-semibold text-center">
               <ShieldCheck className="w-4 h-4 text-green-600" />
-              <span>100% Halal Verified • Guaranteed Fresh Poultry</span>
+              <span>100% Farm Fresh Verified • Guaranteed Fresh Poultry</span>
             </div>
           </div>
         </div>

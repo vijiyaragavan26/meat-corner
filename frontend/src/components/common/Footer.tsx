@@ -29,10 +29,6 @@ export const Footer: React.FC = () => {
               antibiotic-free chicken directly from regional farms to your doorstep in 30-45 minutes.
             </p>
             <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-gray-400">
-              <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-charcoal-600 text-green-400 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-                100% Halal Cut
-              </span>
               <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-charcoal-600 text-amber-400 font-medium">
                 No Antibiotics
               </span>

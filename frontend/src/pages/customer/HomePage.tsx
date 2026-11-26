@@ -163,7 +163,7 @@ export const HomePage: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-white/10 text-xs">
                 <div>
                   <p className="font-extrabold text-white text-base">100%</p>
-                  <p className="text-gray-400">Halal Certified</p>
+                  <p className="text-gray-400">Farm Fresh</p>
                 </div>
                 <div>
                   <p className="font-extrabold text-white text-base">0-4°C</p>

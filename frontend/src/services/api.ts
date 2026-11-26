@@ -2469,7 +2469,7 @@ export const api = {
       isBestSeller: Boolean(body.isBestSeller),
       isTodaySpecial: Boolean(body.isTodaySpecial),
       isRecommended: Boolean(body.isRecommended),
-      freshnessInfo: body.freshnessInfo || 'Fresh daily farm harvest, Halal certified, zero antibiotics.',
+      freshnessInfo: body.freshnessInfo || 'Fresh daily farm harvest, freshly cut, zero antibiotics.',
       cuttingOptions: body.cuttingOptions || ['Curry Cut (Small)', 'Curry Cut (Medium)', 'Large Biryani Cut'],
       cleaningOptions: body.cleaningOptions || ['Standard Clean & Washed', 'Extra Washed with Turmeric'],
       variants: body.variants || [

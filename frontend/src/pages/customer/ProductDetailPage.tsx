@@ -152,7 +152,7 @@ export const ProductDetailPage: React.FC = () => {
               </span>
             )}
             <span className="absolute top-4 right-4 bg-brand-900/80 backdrop-blur-sm text-white font-bold text-xs px-3 py-1 rounded-full">
-              Halal Cut
+              Fresh Cut
             </span>
           </div>
 

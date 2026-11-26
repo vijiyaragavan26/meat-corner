@@ -80,7 +80,7 @@ export const TermsPage: React.FC = () => {
               <span>Product Specifications, Cuts & Pricing</span>
             </h2>
             <ul className="list-disc list-inside space-y-2 text-gray-600 text-xs sm:text-sm">
-              <li><strong>100% Halal & Antibiotic-Free:</strong> All poultry is ethically sourced, certified Halal cut, and stored strictly under 0–4°C chilled conditions.</li>
+              <li><strong>100% Farm-Fresh & Antibiotic-Free:</strong> All poultry is ethically sourced, freshly cut, and stored strictly under 0–4°C chilled conditions.</li>
               <li><strong>Butchery Weight Standards:</strong> Product weight listings indicate gross or net weight based on chosen cut specifications (e.g. Skinless Curry Cut, Boneless Breast, Drumsticks). Natural weight variances of +/- 5% may occur during master artisanal butchering.</li>
               <li><strong>Pricing & Taxes:</strong> All product prices are listed in Indian Rupees (₹ INR) inclusive of applicable taxes (GST 5%). Delivery fees are clearly displayed before order checkout.</li>
             </ul>
