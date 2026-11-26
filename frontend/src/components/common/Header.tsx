@@ -121,6 +121,14 @@ export const Header: React.FC = () => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3 sm:space-x-4">
+            {/* 100+ Cuts Catalogue link */}
+            <Link
+              to="/cuts"
+              className="hidden sm:inline-flex items-center space-x-1.5 text-xs font-black text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full border border-brand-200 transition shadow-sm"
+            >
+              <span>🍗 100+ Cuts Catalogue</span>
+            </Link>
+
             {/* Categories link */}
             <Link
               to="/products"
@@ -272,6 +280,13 @@ export const Header: React.FC = () => {
           </button>
 
           <div className="pt-2 border-t border-gray-100 flex flex-col space-y-2">
+            <Link
+              to="/cuts"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="px-3 py-2 text-sm font-bold text-brand-800 bg-brand-50 rounded-lg flex items-center space-x-2"
+            >
+              <span>🍗 100+ Cuts Catalogue</span>
+            </Link>
             <Link
               to="/products"
               onClick={() => setIsMobileMenuOpen(false)}

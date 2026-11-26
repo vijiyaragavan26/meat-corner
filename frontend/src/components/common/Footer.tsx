@@ -56,6 +56,11 @@ export const Footer: React.FC = () => {
             <h4 className="text-white text-sm font-bold uppercase tracking-wider mb-4">Chicken Cuts</h4>
             <ul className="space-y-2.5 text-sm">
               <li>
+                <Link to="/cuts" className="text-amber-400 font-bold hover:text-amber-300 transition flex items-center space-x-1">
+                  <span>🍗 100+ Cuts Catalogue Guide</span>
+                </Link>
+              </li>
+              <li>
                 <Link to="/products?category=curry-cut-chicken" className="hover:text-white transition">
                   Curry Cut Chicken
                 </Link>

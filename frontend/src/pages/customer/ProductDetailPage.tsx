@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Star,
   ShieldCheck,
@@ -21,6 +21,8 @@ import { useLanguage } from '../../contexts/LanguageContext';
 
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const requestedCut = searchParams.get('cut');
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { t } = useLanguage();
@@ -50,7 +52,14 @@ export const ProductDetailPage: React.FC = () => {
             setSelectedVariant(p.variants[0]);
           }
           if (p.cuttingOptions && p.cuttingOptions.length > 0) {
-            setSelectedCut(p.cuttingOptions[0]);
+            if (requestedCut) {
+              if (!p.cuttingOptions.includes(requestedCut)) {
+                p.cuttingOptions = [requestedCut, ...p.cuttingOptions];
+              }
+              setSelectedCut(requestedCut);
+            } else {
+              setSelectedCut(p.cuttingOptions[0]);
+            }
           }
           if (p.cleaningOptions && p.cleaningOptions.length > 0) {
             setSelectedClean(p.cleaningOptions[0]);
@@ -268,9 +277,17 @@ export const ProductDetailPage: React.FC = () => {
           {/* 2. Butchery Cut Options */}
           {product.cuttingOptions && product.cuttingOptions.length > 0 && (
             <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-charcoal">
-                2. Choose Butchery Cut Preference:
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-charcoal">
+                  2. Choose Butchery Cut Preference:
+                </label>
+                <Link
+                  to="/cuts"
+                  className="text-[11px] font-bold text-brand-700 hover:text-brand-900 underline flex items-center space-x-1"
+                >
+                  <span>🍗 100+ Cuts Catalogue</span>
+                </Link>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {product.cuttingOptions.map((cut) => (
                   <button

@@ -17,6 +17,7 @@ const CheckoutPage = lazy(() => import('./pages/customer/CheckoutPage').then(m =
 const OrderConfirmationPage = lazy(() => import('./pages/customer/OrderConfirmationPage').then(m => ({ default: m.OrderConfirmationPage })));
 const OrderTrackingPage = lazy(() => import('./pages/customer/OrderTrackingPage').then(m => ({ default: m.OrderTrackingPage })));
 const AccountPage = lazy(() => import('./pages/customer/AccountPage').then(m => ({ default: m.AccountPage })));
+const ChickenCutsPage = lazy(() => import('./pages/customer/ChickenCutsPage').then(m => ({ default: m.ChickenCutsPage })));
 
 // Code-split Legal & Compliance Pages
 const PrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage })));
@@ -169,6 +170,22 @@ export const App: React.FC = () => {
               element={
                 <CustomerProtectedRoute>
                   <ProductListPage />
+                </CustomerProtectedRoute>
+              }
+            />
+            <Route
+              path="/cuts"
+              element={
+                <CustomerProtectedRoute>
+                  <ChickenCutsPage />
+                </CustomerProtectedRoute>
+              }
+            />
+            <Route
+              path="/chicken-cuts"
+              element={
+                <CustomerProtectedRoute>
+                  <ChickenCutsPage />
                 </CustomerProtectedRoute>
               }
             />
