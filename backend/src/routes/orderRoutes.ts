@@ -5,7 +5,8 @@ import {
   getOrderById,
   adminGetOrders,
   adminUpdateOrderStatus,
-  adminAssignDeliveryPartner
+  adminAssignDeliveryPartner,
+  adminDeleteOrder
 } from '../controllers/orderController';
 import { authenticateJwt, requireRole } from '../middleware/auth';
 
@@ -20,5 +21,6 @@ router.get('/:id', getOrderById); // can be viewed with ID / tracking link
 router.get('/admin/all', authenticateJwt, requireRole(['ADMIN']), adminGetOrders);
 router.patch('/admin/:id/status', authenticateJwt, requireRole(['ADMIN']), adminUpdateOrderStatus);
 router.post('/admin/:id/assign-partner', authenticateJwt, requireRole(['ADMIN']), adminAssignDeliveryPartner);
+router.delete('/admin/:id', authenticateJwt, requireRole(['ADMIN']), adminDeleteOrder);
 
 export default router;

@@ -35476,7 +35476,9 @@ var adminUpdateOrderStatus = (req, res) => {
     return res.status(404).json({ success: false, message: "Order not found" });
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const updates = { status, updatedAt: now };
+  const updates = { updatedAt: now };
+  if (status) updates.status = status;
+  if (req.body.paymentStatus) updates.paymentStatus = req.body.paymentStatus;
   if (status === "CONFIRMED") updates.confirmedAt = now;
   if (status === "PREPARING") updates.preparedAt = now;
   if (status === "READY_FOR_PICKUP") updates.preparedAt = now;
@@ -35495,7 +35497,21 @@ var adminUpdateOrderStatus = (req, res) => {
     db.releaseStock(order.items.map((it) => ({ variantId: it.variantId, quantity: it.quantity })));
   }
   const updatedOrder = db.updateOrder(order.id, updates);
-  return res.json({ success: true, message: `Order status updated to ${status}`, data: updatedOrder });
+  db.saveToDisk();
+  return res.json({ success: true, message: `Order updated successfully`, data: updatedOrder });
+};
+var adminDeleteOrder = (req, res) => {
+  const id = String(req.params.id);
+  const idx = db.orders.findIndex((o) => o.id === id || o.orderNumber === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, message: "Order not found" });
+  }
+  const order = db.orders[idx];
+  db.orders.splice(idx, 1);
+  db.orderItems = db.orderItems.filter((oi) => oi.orderId !== order.id);
+  db.deliveryAssignments = db.deliveryAssignments.filter((da) => da.orderId !== order.id);
+  db.saveToDisk();
+  return res.json({ success: true, message: `Order #${order.orderNumber} deleted permanently` });
 };
 var adminAssignDeliveryPartner = (req, res) => {
   const id = String(req.params.id);
@@ -35537,6 +35553,7 @@ router4.get("/:id", getOrderById);
 router4.get("/admin/all", authenticateJwt, requireRole(["ADMIN"]), adminGetOrders);
 router4.patch("/admin/:id/status", authenticateJwt, requireRole(["ADMIN"]), adminUpdateOrderStatus);
 router4.post("/admin/:id/assign-partner", authenticateJwt, requireRole(["ADMIN"]), adminAssignDeliveryPartner);
+router4.delete("/admin/:id", authenticateJwt, requireRole(["ADMIN"]), adminDeleteOrder);
 var orderRoutes_default = router4;
 
 // backend/src/routes/paymentRoutes.ts
@@ -35663,6 +35680,7 @@ var verifyRazorpayPayment = async (req, res) => {
     if (order) {
       order.paymentStatus = "PAID";
       order.paymentMethod = "RAZORPAY";
+      order.status = "CONFIRMED";
       order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
       db.saveToDisk();
     }

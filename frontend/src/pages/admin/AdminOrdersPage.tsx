@@ -10,7 +10,9 @@ import {
   AlertCircle,
   Eye,
   RefreshCw,
-  X
+  X,
+  Trash2,
+  CreditCard
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Order, DeliveryPartner, OrderStatus } from '../../types';
@@ -96,13 +98,15 @@ export const AdminOrdersPage: React.FC = () => {
           });
         }
         if (event.data?.type === 'ORDER_UPDATED') {
-          const { orderId, status: newStatus, deliveryPartnerId, deliveryPartner } = event.data;
+          const { orderId, status: newStatus, paymentStatus: newPaymentStatus, paymentMethod: newPaymentMethod, deliveryPartnerId, deliveryPartner } = event.data;
           setOrders((prev) =>
             prev.map((o) => {
               if (o.id === orderId || o.orderNumber === orderId) {
                 return {
                   ...o,
                   status: newStatus || o.status,
+                  paymentStatus: newPaymentStatus || o.paymentStatus,
+                  paymentMethod: newPaymentMethod || o.paymentMethod,
                   deliveryPartnerId: deliveryPartnerId !== undefined ? deliveryPartnerId : o.deliveryPartnerId,
                   deliveryPartnerName: deliveryPartner?.fullName || deliveryPartner?.name || o.deliveryPartnerName,
                 };
@@ -110,6 +114,10 @@ export const AdminOrdersPage: React.FC = () => {
               return o;
             })
           );
+        }
+        if (event.data?.type === 'ORDER_DELETED' && event.data?.orderId) {
+          const delId = event.data.orderId;
+          setOrders((prev) => prev.filter((o) => o.id !== delId && o.orderNumber !== delId));
         }
       };
     } catch {}
@@ -143,24 +151,45 @@ export const AdminOrdersPage: React.FC = () => {
 
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
     setIsUpdating(true);
+    const isDelivered = status === 'DELIVERED';
+    const autoPaymentStatus = isDelivered ? 'PAID' : undefined;
+
     // 1. Optimistic Update: immediately update the order status in state so UI reacts instantly
     setOrders((prev) =>
       prev.map((o) =>
         (o.id === orderId || o.orderNumber === orderId)
-          ? { ...o, status, updatedAt: new Date().toISOString() }
+          ? {
+              ...o,
+              status,
+              paymentStatus: autoPaymentStatus || o.paymentStatus,
+              updatedAt: new Date().toISOString()
+            }
           : o
       )
     );
     if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
-      setSelectedOrder((prev) => (prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null));
+      setSelectedOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              status,
+              paymentStatus: autoPaymentStatus || prev.paymentStatus,
+              updatedAt: new Date().toISOString()
+            }
+          : null
+      );
     }
 
     try {
-      const res = await api.updateAdminOrderStatus(orderId, {
+      const payload: any = {
         status,
         rejectionReason: reason,
         cancellationReason: reason
-      });
+      };
+      if (autoPaymentStatus) {
+        payload.paymentStatus = autoPaymentStatus;
+      }
+      const res = await api.updateAdminOrderStatus(orderId, payload);
       if (res.success && res.data) {
         const updated = (res.data?.order || res.data) as any;
         setOrders((prev) =>
@@ -170,6 +199,7 @@ export const AdminOrdersPage: React.FC = () => {
                 ...o,
                 ...updated,
                 status,
+                paymentStatus: autoPaymentStatus || updated?.paymentStatus || o.paymentStatus,
                 items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (Array.isArray(o.items) ? o.items : []),
                 orderNumber: updated?.orderNumber || o.orderNumber || '',
                 customerName: updated?.customerName || o.customerName || 'Customer',
@@ -188,6 +218,7 @@ export const AdminOrdersPage: React.FC = () => {
                   ...prev,
                   ...updated,
                   status,
+                  paymentStatus: autoPaymentStatus || updated?.paymentStatus || prev.paymentStatus,
                   items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (prev.items || []),
                 }
               : null
@@ -197,6 +228,53 @@ export const AdminOrdersPage: React.FC = () => {
     } catch (err: any) {
       console.error('Status update failed:', err);
       alert(err.message || 'Status update failed');
+      await fetchOrders(true);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handlePaymentStatusUpdate = async (orderId: string, paymentStatus: 'PAID' | 'PENDING') => {
+    setIsUpdating(true);
+    setOrders((prev) =>
+      prev.map((o) =>
+        (o.id === orderId || o.orderNumber === orderId)
+          ? { ...o, paymentStatus, updatedAt: new Date().toISOString() }
+          : o
+      )
+    );
+    if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+      setSelectedOrder((prev) => (prev ? { ...prev, paymentStatus, updatedAt: new Date().toISOString() } : null));
+    }
+
+    try {
+      await api.updateAdminOrderStatus(orderId, { paymentStatus });
+    } catch (err: any) {
+      console.error('Payment update failed:', err);
+      alert(err.message || 'Payment status update failed');
+      await fetchOrders(true);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string, orderNumber?: string) => {
+    const displayNum = orderNumber || orderId;
+    if (!window.confirm(`Are you sure you want to permanently delete Order #${displayNum}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      // Optimistic delete
+      setOrders((prev) => prev.filter((o) => o.id !== orderId && o.orderNumber !== orderId && o.orderNumber !== displayNum));
+      if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId || selectedOrder.orderNumber === displayNum)) {
+        setSelectedOrder(null);
+      }
+      await api.deleteAdminOrder(orderId);
+    } catch (err: any) {
+      console.error('Delete failed:', err);
+      alert(err.message || 'Failed to delete order');
       await fetchOrders(true);
     } finally {
       setIsUpdating(false);
@@ -433,9 +511,28 @@ export const AdminOrdersPage: React.FC = () => {
                     {/* Payment */}
                     <td className="py-3.5 px-4">
                       <span className="font-black text-brand-700 block text-sm">₹{order.totalAmount || 0}</span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                        {order.paymentMethod || 'COD'} • {order.paymentStatus || 'PENDING'}
-                      </span>
+                      <div className="flex flex-col space-y-1 mt-1">
+                        <span
+                          className={`text-[9px] font-black px-2 py-0.5 rounded-full inline-flex items-center w-max ${
+                            order.paymentStatus === 'PAID'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-amber-100 text-amber-900 border border-amber-300'
+                          }`}
+                        >
+                          {order.paymentStatus === 'PAID' ? '✓ PAID' : 'PENDING'} • {order.paymentMethod || 'COD'}
+                        </span>
+                        {order.paymentStatus !== 'PAID' && (
+                          <button
+                            type="button"
+                            disabled={isUpdating}
+                            onClick={() => handlePaymentStatusUpdate(order.id || order.orderNumber, 'PAID')}
+                            className="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-left inline-flex items-center space-x-1"
+                            title="Mark Cash Collected / Paid"
+                          >
+                            <span>Mark Paid</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                     {/* Status Direct Selector */}
@@ -482,15 +579,26 @@ export const AdminOrdersPage: React.FC = () => {
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
-                      <button
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setSelectedPartnerId(order.deliveryPartnerId || '');
-                        }}
-                        className="bg-charcoal hover:bg-black text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
-                      >
-                        Manage
-                      </button>
+                      <div className="flex items-center justify-end space-x-1.5">
+                        <button
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setSelectedPartnerId(order.deliveryPartnerId || '');
+                          }}
+                          className="bg-charcoal hover:bg-black text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
+                        >
+                          Manage
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={() => handleDeleteOrder(order.id || order.orderNumber, order.orderNumber)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition border border-transparent hover:border-red-200"
+                          title="Delete Order"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -692,20 +800,73 @@ export const AdminOrdersPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Print Invoice Action */}
-            <div className="flex justify-between items-center pt-2">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="bg-gray-100 hover:bg-gray-200 text-charcoal font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-2"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Print Invoice</span>
-              </button>
+            {/* Payment Status Management Card */}
+            <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Payment Information</p>
+                <div className="flex items-center space-x-2 mt-0.5">
+                  <CreditCard className="w-4 h-4 text-brand-700" />
+                  <span className="font-bold text-xs text-charcoal">{selectedOrder.paymentMethod || 'COD'}</span>
+                  <span
+                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      selectedOrder.paymentStatus === 'PAID'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                    }`}
+                  >
+                    {selectedOrder.paymentStatus === 'PAID' ? '✓ PAID' : 'PENDING'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                {selectedOrder.paymentStatus !== 'PAID' ? (
+                  <button
+                    type="button"
+                    disabled={isUpdating}
+                    onClick={() => handlePaymentStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PAID')}
+                    className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
+                  >
+                    Mark Paid (Cash Collected)
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isUpdating}
+                    onClick={() => handlePaymentStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PENDING')}
+                    className="bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-700 font-bold text-xs px-3 py-1.5 rounded-xl transition"
+                  >
+                    Mark Unpaid
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Print Invoice & Delete Action */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="bg-gray-100 hover:bg-gray-200 text-charcoal font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Invoice</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={() => handleDeleteOrder(selectedOrder.id || selectedOrder.orderNumber, selectedOrder.orderNumber)}
+                  className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center space-x-1.5"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Order</span>
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedOrder(null)}
-                className="bg-charcoal text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:bg-black transition"
+                className="w-full sm:w-auto bg-charcoal text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:bg-black transition text-center"
               >
                 Done
               </button>

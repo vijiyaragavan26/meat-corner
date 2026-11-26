@@ -148,6 +148,7 @@ export const verifyRazorpayPayment = async (req: AuthenticatedRequest, res: Resp
     if (order) {
       order.paymentStatus = 'PAID';
       order.paymentMethod = 'RAZORPAY';
+      order.status = 'CONFIRMED';
       order.updatedAt = new Date().toISOString();
       db.saveToDisk();
     }

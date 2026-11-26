@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (credentials: any) => Promise<User>;
   loginWithOtp: (identifier: string, otp: string) => Promise<User>;
   sendOtp: (identifier: string) => Promise<{ success: boolean; message: string; otp?: string }>;
+  resetPassword: (identifier: string, newPassword: string, otp?: string) => Promise<any>;
   register: (data: any) => Promise<User>;
   logout: () => void;
   isAdmin: boolean;
@@ -148,6 +149,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.data || { success: true, message: 'OTP sent' };
   };
 
+  const resetPassword = async (identifier: string, newPassword: string, otp?: string) => {
+    const res = await api.resetPassword({ identifier, newPassword, otp });
+    return res;
+  };
+
   const register = async (data: any) => {
     const res = await api.register(data);
     if (res.success && res.data.token) {
@@ -180,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginWithOtp,
         sendOtp,
+        resetPassword,
         register,
         logout,
         isAdmin,

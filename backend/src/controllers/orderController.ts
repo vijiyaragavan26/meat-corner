@@ -294,7 +294,9 @@ export const adminUpdateOrderStatus = (req: AuthenticatedRequest, res: Response)
   }
 
   const now = new Date().toISOString();
-  const updates: Partial<Order> = { status, updatedAt: now };
+  const updates: Partial<Order> = { updatedAt: now };
+  if (status) updates.status = status;
+  if (req.body.paymentStatus) updates.paymentStatus = req.body.paymentStatus;
 
   if (status === 'CONFIRMED') updates.confirmedAt = now;
   if (status === 'PREPARING') updates.preparedAt = now;
@@ -316,7 +318,25 @@ export const adminUpdateOrderStatus = (req: AuthenticatedRequest, res: Response)
   }
 
   const updatedOrder = db.updateOrder(order.id, updates);
-  return res.json({ success: true, message: `Order status updated to ${status}`, data: updatedOrder });
+  db.saveToDisk();
+  return res.json({ success: true, message: `Order updated successfully`, data: updatedOrder });
+};
+
+export const adminDeleteOrder = (req: AuthenticatedRequest, res: Response) => {
+  const id = String(req.params.id);
+  const idx = db.orders.findIndex((o) => o.id === id || o.orderNumber === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  const order = db.orders[idx];
+  db.orders.splice(idx, 1);
+  db.orderItems = db.orderItems.filter((oi) => oi.orderId !== order.id);
+  db.deliveryAssignments = db.deliveryAssignments.filter((da) => da.orderId !== order.id);
+
+  db.saveToDisk();
+
+  return res.json({ success: true, message: `Order #${order.orderNumber} deleted permanently` });
 };
 
 export const adminAssignDeliveryPartner = (req: AuthenticatedRequest, res: Response) => {

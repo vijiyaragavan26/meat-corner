@@ -20,7 +20,7 @@ export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
-  const { user, isLoading: authLoading, login, loginWithOtp, sendOtp, register } = useAuth();
+  const { user, isLoading: authLoading, login, loginWithOtp, sendOtp, resetPassword, register } = useAuth();
 
   // If already logged in, redirect immediately to target page
   useEffect(() => {
@@ -51,6 +51,17 @@ export const AuthPage: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
+  // Forgot Password flow inputs
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotGeneratedOtp, setForgotGeneratedOtp] = useState<string | null>(null);
+  const [forgotCountdown, setForgotCountdown] = useState(0);
+
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -64,6 +75,14 @@ export const AuthPage: React.FC = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [countdown]);
+
+  useEffect(() => {
+    if (forgotCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setForgotCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [forgotCountdown]);
 
   // Request OTP via SMS / Email
   const handleRequestOtp = async (e?: React.FormEvent) => {
@@ -79,13 +98,83 @@ export const AuthPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await sendOtp(cleanId);
+      const res = await sendOtp(cleanId);
       setIsOtpSent(true);
-      setGeneratedOtp('');
+      if (res?.otp) {
+        setGeneratedOtp(res.otp);
+        setOtp(res.otp);
+      }
       setSuccessMsg(`6-digit OTP verification code sent to ${cleanId}. Please check your SMS or Email.`);
       setCountdown(30);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRequestForgotOtp = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    const cleanId = forgotIdentifier.trim();
+    if (!cleanId) {
+      setErrorMsg('Please enter your mobile number or email address.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await sendOtp(cleanId);
+      setForgotOtpSent(true);
+      if (res?.otp) {
+        setForgotGeneratedOtp(res.otp);
+        setForgotOtp(res.otp);
+      }
+      setSuccessMsg(`Verification code generated for ${cleanId}.`);
+      setForgotCountdown(30);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to send OTP.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const cleanId = forgotIdentifier.trim();
+    if (!cleanId) {
+      setErrorMsg('Please enter your mobile number or email.');
+      return;
+    }
+    if (forgotOtpSent && (!forgotOtp || forgotOtp.trim().length < 4)) {
+      setErrorMsg('Please enter the verification code.');
+      return;
+    }
+    if (!forgotNewPassword || forgotNewPassword.length < 6) {
+      setErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await resetPassword(cleanId, forgotNewPassword, forgotOtp.trim());
+      try {
+        await login({ identifier: cleanId, email: cleanId, password: forgotNewPassword });
+        navigate(redirect);
+      } catch {
+        setIsForgotPassword(false);
+        setIdentifier(cleanId);
+        setPassword(forgotNewPassword);
+        setSuccessMsg('Password reset successfully! You can now sign in.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Password reset failed. Please check your credentials.');
     } finally {
       setIsSubmitting(false);
     }
@@ -279,9 +368,142 @@ export const AuthPage: React.FC = () => {
           )}
 
           {/* ============================================================ */}
-          {/* SIGN IN VIEW */}
+          {/* FORGOT PASSWORD / RESET PASSWORD VIEW */}
           {/* ============================================================ */}
-          {!isRegister ? (
+          {isForgotPassword ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center font-bold">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-charcoal">Reset Account Password</h3>
+                    <p className="text-[10px] text-gray-500">Enter mobile/email to set your new password</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                  className="text-xs font-bold text-gray-500 hover:text-brand-700"
+                >
+                  ← Back to Sign In
+                </button>
+              </div>
+
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    Mobile Number or Email *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      placeholder="Enter registered mobile number or email"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-24 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
+                    />
+                    <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                    <button
+                      type="button"
+                      disabled={isSubmitting || forgotCountdown > 0}
+                      onClick={handleRequestForgotOtp}
+                      className="absolute right-1.5 top-1.5 bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                    >
+                      {forgotCountdown > 0 ? `${forgotCountdown}s` : forgotOtpSent ? 'Resend' : 'Send Code'}
+                    </button>
+                  </div>
+                </div>
+
+                {forgotGeneratedOtp && (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between">
+                    <span>Verification Code: <strong className="font-mono text-sm tracking-wider">{forgotGeneratedOtp}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setForgotOtp(forgotGeneratedOtp)}
+                      className="text-[11px] font-bold text-brand-700 underline"
+                    >
+                      Auto-fill
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    6-Digit Verification Code *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      value={forgotOtp}
+                      onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Enter 6-digit code"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono font-bold outline-none focus:border-brand-700 focus:bg-white transition"
+                    />
+                    <KeyRound className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    New Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showForgotNewPassword ? 'text' : 'password'}
+                      required
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      placeholder="Enter at least 6 characters"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
+                    />
+                    <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                      className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showForgotNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    Confirm New Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showForgotNewPassword ? 'text' : 'password'}
+                      required
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700 focus:bg-white transition"
+                    />
+                    <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white font-black py-3 rounded-xl shadow-lg shadow-brand-700/25 text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2"
+                >
+                  <span>{isSubmitting ? 'Updating Password...' : 'Save New Password & Sign In'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          ) : !isRegister ? (
             <div className="space-y-5">
               {/* Login Method Sub-Toggle: Password vs OTP */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
@@ -354,12 +576,14 @@ export const AuthPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setLoginMode('otp');
-                          handleRequestOtp();
+                          setIsForgotPassword(true);
+                          setForgotIdentifier(identifier);
+                          setErrorMsg(null);
+                          setSuccessMsg(null);
                         }}
                         className="text-[11px] font-bold text-brand-700 hover:underline"
                       >
-                        Forgot? Sign In with OTP
+                        Forgot Password? Reset Here
                       </button>
                     </div>
                     <div className="relative">
@@ -410,6 +634,18 @@ export const AuthPage: React.FC = () => {
                         </div>
 
                         {/* OTP Input */}
+                        {generatedOtp && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-900 flex items-center justify-between">
+                            <span>Verification Code: <strong className="font-mono text-sm tracking-wider">{generatedOtp}</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => setOtp(generatedOtp)}
+                              className="text-[11px] font-bold text-brand-700 underline"
+                            >
+                              Auto-fill
+                            </button>
+                          </div>
+                        )}
                         <div>
                           <div className="flex justify-between items-center mb-1.5">
                             <label className="block text-xs font-bold uppercase tracking-wider text-gray-600">
