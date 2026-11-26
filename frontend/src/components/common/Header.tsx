@@ -68,19 +68,19 @@ export const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo & Brand Identity */}
-          <div className="flex items-center space-x-6">
-            <Link to="/" className="flex items-center space-x-2.5 group">
+          <div className="flex items-center space-x-3 sm:space-x-6 min-w-0">
+            <Link to="/" className="flex items-center space-x-2 sm:space-x-2.5 group flex-shrink-0">
               <img
                 src="/logo.png"
                 alt="MPM Meat Corner Logo"
-                className="w-12 h-12 rounded-full object-cover shadow-md group-hover:scale-105 transition-transform border-2 border-emerald-500/20"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover shadow-md group-hover:scale-105 transition-transform border-2 border-emerald-500/20 flex-shrink-0"
               />
               <div className="flex flex-col">
                 <div className="flex items-center">
-                  <span className="text-2xl font-black tracking-tight text-charcoal">MPM MEAT</span>
-                  <span className="text-2xl font-black tracking-tight text-brand-700 ml-1">CORNER</span>
+                  <span className="text-lg sm:text-2xl font-black tracking-tight text-charcoal">MPM MEAT</span>
+                  <span className="text-lg sm:text-2xl font-black tracking-tight text-brand-700 ml-1">CORNER</span>
                 </div>
-                <span className="text-[10px] tracking-widest uppercase font-semibold text-gray-500">
+                <span className="text-[9px] sm:text-[10px] tracking-widest uppercase font-semibold text-gray-500 truncate">
                   Fresh • Hygienic • Healthy
                 </span>
               </div>
@@ -137,23 +137,15 @@ export const Header: React.FC = () => {
               {t('explore_menu')}
             </Link>
 
-            {/* Mobile language switch */}
-            <button
-              onClick={() => setLanguage(language === 'en' ? 'ta' : 'en')}
-              className="md:hidden p-2 text-gray-600 hover:text-brand-700"
-            >
-              <Globe className="w-5 h-5" />
-            </button>
-
             {/* Cart Trigger Button */}
             <button
               onClick={openDrawer}
-              className="relative flex items-center bg-brand-700 hover:bg-brand-800 text-white px-4 py-2.5 rounded-xl font-medium shadow-md shadow-brand-700/20 hover:shadow-lg transition group"
+              className="relative flex items-center bg-brand-700 hover:bg-brand-800 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-medium shadow-md shadow-brand-700/20 hover:shadow-lg transition group"
             >
-              <ShoppingCart className="w-5 h-5 mr-2 transition-transform group-hover:scale-110" />
+              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2 transition-transform group-hover:scale-110" />
               <span className="hidden sm:inline font-semibold">{t('cart')}</span>
               {itemCount > 0 && (
-                <span className="ml-1.5 sm:ml-2 bg-white text-brand-700 font-bold text-xs px-2 py-0.5 rounded-full shadow-sm">
+                <span className="ml-1 sm:ml-2 bg-white text-brand-700 font-bold text-xs px-1.5 sm:px-2 py-0.5 rounded-full shadow-sm">
                   {itemCount}
                 </span>
               )}
@@ -251,7 +243,33 @@ export const Header: React.FC = () => {
 
       {/* Mobile Drawer Navigation */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-3">
+        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-3 animate-in fade-in slide-in-from-top-2">
+          {/* Language Switcher Grid */}
+          <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-2xl">
+            <button
+              onClick={() => setLanguage('en')}
+              className={`py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 transition ${
+                language === 'en'
+                  ? 'bg-white text-charcoal shadow-sm'
+                  : 'text-gray-500 hover:text-charcoal'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-brand-700" />
+              <span>English</span>
+            </button>
+            <button
+              onClick={() => setLanguage('ta')}
+              className={`py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 transition ${
+                language === 'ta'
+                  ? 'bg-brand-700 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-charcoal'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>தமிழ் (Tamil)</span>
+            </button>
+          </div>
+
           <form onSubmit={handleSearchSubmit}>
             <div className="relative w-full">
               <input

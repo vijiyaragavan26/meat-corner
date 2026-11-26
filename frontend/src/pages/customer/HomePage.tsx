@@ -13,7 +13,9 @@ import {
   Flame,
   ThumbsUp,
   Percent,
-  Scissors
+  Scissors,
+  Globe,
+  Menu
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Product, Category } from '../../types';
@@ -23,7 +25,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const { t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [bestsellers, setBestsellers] = useState<Product[]>([]);
@@ -104,6 +106,56 @@ export const HomePage: React.FC = () => {
                 <div className="flex items-center space-x-3 text-xs text-gray-400 px-4 py-3 bg-white/5 rounded-2xl backdrop-blur-sm border border-white/10">
                   <Clock className="w-4 h-4 text-amber-400" />
                   <span>Delivery in <strong>30-45 mins</strong></span>
+                </div>
+              </div>
+
+              {/* Quick Actions Grid (Language & Menu Shortcuts) */}
+              <div className="pt-2">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  {/* Action 1: Language Switcher Grid Card */}
+                  <button
+                    type="button"
+                    onClick={() => setLanguage(language === 'en' ? 'ta' : 'en')}
+                    className="flex items-center justify-between p-3 sm:p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-md transition-all text-left group"
+                  >
+                    <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-700/90 text-white flex items-center justify-center font-bold text-sm shadow flex-shrink-0">
+                        <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-300 block truncate">
+                          Language / மொழி
+                        </span>
+                        <span className="text-xs sm:text-sm font-black text-white group-hover:text-amber-300 transition truncate block">
+                          {language === 'en' ? 'தமிழ் (Tamil)' : 'English'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full flex-shrink-0 ml-1">
+                      {language === 'en' ? 'EN' : 'தமிழ்'}
+                    </span>
+                  </button>
+
+                  {/* Action 2: 100+ Cuts Catalogue & Menu Shortcut */}
+                  <Link
+                    to="/cuts"
+                    className="flex items-center justify-between p-3 sm:p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-md transition-all text-left group"
+                  >
+                    <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-500/90 text-white flex items-center justify-center font-bold text-sm shadow flex-shrink-0">
+                        <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-300 block truncate">
+                          Menu & Brochure
+                        </span>
+                        <span className="text-xs sm:text-sm font-black text-white group-hover:text-amber-300 transition truncate block">
+                          100+ Cuts Catalogue
+                        </span>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 group-hover:translate-x-1 transition-transform flex-shrink-0 ml-1" />
+                  </Link>
                 </div>
               </div>
 
