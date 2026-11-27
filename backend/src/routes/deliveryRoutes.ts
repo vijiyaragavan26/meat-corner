@@ -7,6 +7,7 @@ import {
   rejectAssignment,
   updateDeliveryOrderStatus,
   verifyDeliveryOtp,
+  submitCodCollection,
   updateGpsLocation,
   getEarnings
 } from '../controllers/deliveryController';
@@ -23,6 +24,7 @@ router.get('/assignments', getAssignedOrders);
 router.post('/assignments/:id/accept', acceptAssignment);
 router.post('/assignments/:id/reject', rejectAssignment);
 router.patch('/orders/:id/status', updateDeliveryOrderStatus);
+router.post('/orders/:id/collect-cod', submitCodCollection);
 router.post('/orders/:id/verify-otp', verifyDeliveryOtp);
 router.post('/location', updateGpsLocation);
 router.get('/earnings', getEarnings);

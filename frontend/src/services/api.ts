@@ -420,6 +420,11 @@ function normalizeSupabaseOrder(o: any) {
     status: o.status || 'PLACED',
     paymentMethod: o.paymentMethod || 'COD',
     paymentStatus: o.paymentStatus || 'PENDING',
+    paymentDetails: o.paymentDetails || null,
+    codDetails: o.codDetails || null,
+    timeline: Array.isArray(o.timeline) ? o.timeline : [],
+    deliveryOtpAttempts: typeof o.deliveryOtpAttempts === 'number' ? o.deliveryOtpAttempts : 0,
+    deliveryOtpVerifiedAt: o.deliveryOtpVerifiedAt || null,
     subtotal: Number(o.subtotal) || 0,
     deliveryCharge: Number(o.deliveryCharge) || 0,
     discountAmount: Number(o.discountAmount) || 0,
@@ -596,7 +601,12 @@ async function updateSupabaseOrderStatus(orderIdOrNumber: string, status: string
     if (dbStatus === 'PICKED_UP' && !payload.pickedUpAt) payload.pickedUpAt = now;
     if (dbStatus === 'DELIVERED') {
       if (!payload.deliveredAt) payload.deliveredAt = now;
-      payload.paymentStatus = 'PAID';
+      if (!payload.paymentStatus) {
+        // Only set PAID for online orders; COD orders require admin settlement to become PAID
+        if (extraFields.paymentMethod === 'ONLINE' || extraFields.paymentMethod === 'RAZORPAY') {
+          payload.paymentStatus = 'PAID';
+        }
+      }
     }
 
     const res = await fetch(`${SUPABASE_URL}/rest/v1/Orders?or=(id.eq.${orderIdOrNumber},orderNumber.eq.${orderIdOrNumber})`, {
@@ -2308,6 +2318,62 @@ export const api = {
       return ord || { id, status };
     }),
 
+  submitCodCollection: (id: string, amountCollected: number) =>
+    callApi(
+      '/delivery/orders/' + id + '/collect-cod',
+      { method: 'POST', body: JSON.stringify({ amountCollected }) },
+      async () => {
+        const now = new Date().toISOString();
+        const localOrders = getLiveOrders();
+        const ord = localOrders.find((o) => o.id === id || o.orderNumber === id);
+
+        const codDetails = {
+          status: 'COLLECTED' as const,
+          amountExpected: ord?.totalAmount || amountCollected,
+          amountCollected: amountCollected,
+          collectedAt: now,
+          collectedByPartnerId: ord?.deliveryPartnerId || 'dp_1',
+          collectedByPartnerName: ord?.deliveryPartnerName || 'Poopesh M',
+        };
+
+        if (ord) {
+          ord.paymentStatus = 'COD_COLLECTED';
+          ord.codDetails = codDetails;
+          ord.updatedAt = now;
+          if (!ord.timeline) ord.timeline = [];
+          ord.timeline.push({
+            event: 'COD_COLLECTED',
+            title: 'COD Cash Collected by Delivery Partner',
+            timestamp: now,
+            actor: ord.deliveryPartnerName || 'Delivery Partner',
+            details: `Exact amount ₹${amountCollected} collected from customer. Awaiting Admin Settlement.`
+          });
+          saveLiveOrders(localOrders);
+        }
+
+        // Sync to Supabase Orders
+        await updateSupabaseOrderStatus(id, ord?.status || 'OUT_FOR_DELIVERY', {
+          paymentStatus: 'COD_COLLECTED',
+          codDetails,
+          updatedAt: now
+        });
+
+        broadcastOrderEvent('ORDER_UPDATED', {
+          orderId: id,
+          orderNumber: ord?.orderNumber || id,
+          paymentStatus: 'COD_COLLECTED',
+          codDetails,
+          status: ord?.status || 'OUT_FOR_DELIVERY'
+        });
+
+        return {
+          success: true,
+          message: `₹${amountCollected} COD collection recorded successfully. Status set to COD COLLECTED.`,
+          data: ord
+        };
+      }
+    ),
+
   verifyDeliveryOtp: (id: string, otp: string, cashCollected?: number) =>
     callApi(
       '/delivery/orders/' + id + '/verify-otp',
@@ -2321,15 +2387,18 @@ export const api = {
         const expectedOtp = ord?.deliveryOtp || '1234';
         const cleanOtp = (otp || '').trim();
 
-        if (cleanOtp !== expectedOtp && cleanOtp !== '1234' && cleanOtp !== '9999') {
-          throw new Error('Invalid Delivery OTP! Please enter the customer delivery verification code.');
+        if (cleanOtp !== expectedOtp) {
+          throw new Error('Invalid Delivery OTP! Please ask customer for the 4-digit OTP shown on their tracking page.');
         }
 
         const now = new Date().toISOString();
+        const isOnline = ord?.paymentMethod === 'RAZORPAY' || ord?.paymentMethod === 'ONLINE' || ord?.paymentStatus === 'PAID';
+        const effectivePaymentStatus = isOnline ? 'PAID' : (ord?.paymentStatus === 'PAID' ? 'PAID' : 'COD_COLLECTED');
+
         await updateSupabaseOrderStatus(id, 'DELIVERED', {
-          paymentStatus: 'PAID',
+          paymentStatus: effectivePaymentStatus,
           deliveredAt: now,
-          cashCollected: cashCollected || ord?.totalAmount || 0,
+          cashCollected: cashCollected || ord?.codDetails?.amountCollected || ord?.totalAmount || 0,
         });
 
         // Update DeliveryAssignments to COMPLETED
@@ -2343,20 +2412,6 @@ export const api = {
           body: JSON.stringify({
             status: 'COMPLETED',
             completedAt: now
-          })
-        }).catch(() => {});
-
-        // Update Payments table to CAPTURED
-        await fetch(`${SUPABASE_URL}/rest/v1/Payments?orderId=eq.${id}`, {
-          method: 'PATCH',
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            status: 'CAPTURED',
-            updatedAt: now
           })
         }).catch(() => {});
 
@@ -2382,14 +2437,34 @@ export const api = {
         const localTarget = localOrders.find((o) => o.id === id || o.orderNumber === id);
         if (localTarget) {
           localTarget.status = 'DELIVERED';
-          localTarget.paymentStatus = 'PAID';
+          localTarget.paymentStatus = effectivePaymentStatus;
           localTarget.deliveredAt = now;
+          localTarget.deliveryOtpVerifiedAt = now;
+          if (cashCollected) {
+            localTarget.codDetails = {
+              status: 'COLLECTED',
+              amountExpected: localTarget.totalAmount,
+              amountCollected: cashCollected,
+              collectedAt: now,
+              collectedByPartnerId: localTarget.deliveryPartnerId || 'dp_1',
+              collectedByPartnerName: localTarget.deliveryPartnerName || 'Poopesh M',
+            };
+          }
+          if (!localTarget.timeline) localTarget.timeline = [];
+          localTarget.timeline.push({
+            event: 'DELIVERED',
+            title: 'Order Delivered to Customer (OTP Verified)',
+            timestamp: now,
+            actor: localTarget.deliveryPartnerName || 'Delivery Partner',
+            details: `Secure delivery OTP verified. Status marked DELIVERED.`
+          });
         } else if (ord) {
           localOrders.unshift({
             ...ord,
             status: 'DELIVERED',
-            paymentStatus: 'PAID',
+            paymentStatus: effectivePaymentStatus,
             deliveredAt: now,
+            deliveryOtpVerifiedAt: now,
           });
         }
         saveLiveOrders(localOrders);
@@ -2412,7 +2487,7 @@ export const api = {
           orderId: id,
           orderNumber: orderKey,
           status: 'DELIVERED',
-          paymentStatus: 'PAID',
+          paymentStatus: effectivePaymentStatus,
           earningAwarded: 40,
           deliveredAt: now
         });
@@ -2421,7 +2496,7 @@ export const api = {
           success: true,
           verified: true,
           message: 'Delivery confirmed! Earning of ₹40 added to your wallet.',
-          order: ord || { id, status: 'DELIVERED', paymentStatus: 'PAID' }
+          order: localTarget || ord || { id, status: 'DELIVERED', paymentStatus: effectivePaymentStatus }
         };
       }
     ),
@@ -2672,6 +2747,195 @@ export const api = {
           deliveryPartner: partner,
         });
         return ord || { id, status: 'PARTNER_ASSIGNED', deliveryPartnerId, deliveryPartner: partner };
+      }
+    ),
+
+  settleCodOrder: (id: string, notes?: string) =>
+    callApi(
+      '/orders/admin/' + id + '/settle-cod',
+      { method: 'POST', body: JSON.stringify({ notes }) },
+      async () => {
+        const now = new Date().toISOString();
+        const orders = getLiveOrders();
+        const ord = orders.find((o) => o.id === id || o.orderNumber === id);
+        if (ord) {
+          ord.paymentStatus = 'PAID';
+          ord.codDetails = {
+            ...(ord.codDetails || {
+              status: 'COLLECTED',
+              amountExpected: ord.totalAmount,
+              amountCollected: ord.totalAmount,
+              collectedAt: now,
+              collectedByPartnerId: ord.deliveryPartnerId || 'dp_1',
+              collectedByPartnerName: ord.deliveryPartnerName || 'Poopesh M',
+            }),
+            status: 'SETTLED',
+            settledAt: now,
+            settledByAdminId: 'Administrator',
+            settlementNotes: notes || 'COD cash handover verified by store admin',
+          };
+          if (!ord.timeline) ord.timeline = [];
+          ord.timeline.push({
+            event: 'COD_SETTLED',
+            title: 'COD Handover Verified & Settled to PAID',
+            timestamp: now,
+            actor: 'Administrator',
+            details: `₹${ord.totalAmount} cash settled to Meat Corner store account`
+          });
+          ord.updatedAt = now;
+          saveLiveOrders(orders);
+        }
+
+        await updateSupabaseOrderStatus(id, ord?.status || 'DELIVERED', {
+          paymentStatus: 'PAID',
+          updatedAt: now
+        });
+
+        broadcastOrderEvent('ORDER_UPDATED', {
+          orderId: id,
+          orderNumber: ord?.orderNumber || id,
+          paymentStatus: 'PAID',
+          codDetails: ord?.codDetails,
+          status: ord?.status || 'DELIVERED'
+        });
+
+        return {
+          success: true,
+          message: `Order #${ord?.orderNumber || id} COD collection settled as PAID`,
+          data: ord
+        };
+      }
+    ),
+
+  settlePartnerCodOrders: (partnerId: string) =>
+    callApi(
+      '/orders/admin/settle-partner-cod',
+      { method: 'POST', body: JSON.stringify({ partnerId }) },
+      async () => {
+        const now = new Date().toISOString();
+        const orders = getLiveOrders();
+        let count = 0;
+        let total = 0;
+
+        orders.forEach((o) => {
+          if (o.deliveryPartnerId === partnerId && o.paymentMethod === 'COD' && o.paymentStatus === 'COD_COLLECTED') {
+            o.paymentStatus = 'PAID';
+            o.codDetails = {
+              ...(o.codDetails || { status: 'COLLECTED', amountExpected: o.totalAmount, amountCollected: o.totalAmount }),
+              status: 'SETTLED',
+              settledAt: now,
+              settledByAdminId: 'Administrator',
+              settlementNotes: `Batch settlement for delivery partner`
+            };
+            if (!o.timeline) o.timeline = [];
+            o.timeline.push({
+              event: 'COD_SETTLED',
+              title: 'Partner Batch COD Settlement',
+              timestamp: now,
+              actor: 'Administrator',
+              details: `Batch cash settlement verified and settled to PAID`
+            });
+            o.updatedAt = now;
+            count++;
+            total += o.totalAmount;
+            updateSupabaseOrderStatus(o.id, o.status, { paymentStatus: 'PAID' });
+          }
+        });
+
+        if (count > 0) {
+          saveLiveOrders(orders);
+          broadcastOrderEvent('ORDERS_BATCH_SETTLED', { partnerId, count, total });
+        }
+
+        return {
+          success: true,
+          message: `Successfully settled ${count} COD orders totaling ₹${total}.`,
+          settledCount: count,
+          totalSettled: total
+        };
+      }
+    ),
+
+  getPaymentSummary: (params?: { startDate?: string; endDate?: string }) =>
+    callApi(
+      `/orders/admin/payment-summary${params ? '?' + new URLSearchParams(params as any).toString() : ''}`,
+      {},
+      async () => {
+        const orders = getLiveOrders();
+        let totalOnlinePaid = 0;
+        let onlineCount = 0;
+        let totalCodCollected = 0;
+        let codCollectedCount = 0;
+        let totalCodPending = 0;
+        let codPendingCount = 0;
+        let totalDeliveredRevenue = 0;
+        let totalDeliveredOrders = 0;
+        let totalPendingOrders = 0;
+
+        const partnerMap = new Map<string, any>();
+
+        orders.forEach((o) => {
+          const amt = Number(o.totalAmount) || 0;
+          if (o.status === 'DELIVERED') {
+            totalDeliveredOrders++;
+            totalDeliveredRevenue += amt;
+          } else if (o.status !== 'CANCELLED') {
+            totalPendingOrders++;
+          }
+
+          if (o.paymentMethod === 'ONLINE' || o.paymentMethod === 'RAZORPAY') {
+            if (o.paymentStatus === 'PAID') {
+              totalOnlinePaid += amt;
+              onlineCount++;
+            }
+          } else {
+            // COD
+            if (o.paymentStatus === 'COD_COLLECTED') {
+              totalCodCollected += amt;
+              codCollectedCount++;
+            } else if (o.paymentStatus === 'PAID') {
+              totalDeliveredRevenue += amt;
+            } else {
+              totalCodPending += amt;
+              codPendingCount++;
+            }
+
+            const pId = o.deliveryPartnerId || 'unassigned';
+            const pName = o.deliveryPartnerName || (pId === 'dp_1' ? 'Poopesh M' : 'Unassigned Rider');
+            if (!partnerMap.has(pId)) {
+              partnerMap.set(pId, {
+                partnerId: pId,
+                partnerName: pName,
+                totalCollected: 0,
+                pendingSettlement: 0,
+                settledPaid: 0,
+                orderCount: 0
+              });
+            }
+            const pData = partnerMap.get(pId);
+            pData.orderCount++;
+            if (o.paymentStatus === 'COD_COLLECTED') {
+              pData.totalCollected += amt;
+              pData.pendingSettlement += amt;
+            } else if (o.paymentStatus === 'PAID') {
+              pData.settledPaid += amt;
+            }
+          }
+        });
+
+        return {
+          totalOnlinePaid,
+          onlineCount,
+          totalCodCollected,
+          codCollectedCount,
+          totalCodPending,
+          codPendingCount,
+          totalDeliveredRevenue,
+          totalDeliveredOrders,
+          totalPendingOrders,
+          totalOrderRevenue: totalOnlinePaid + totalCodCollected + totalDeliveredRevenue,
+          partnerBreakdown: Array.from(partnerMap.values())
+        };
       }
     ),
 

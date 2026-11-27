@@ -44,6 +44,10 @@ export const DeliveryDashboard: React.FC = () => {
   const [otpError, setOtpError] = useState<string | null>(null);
   const [securityAlert, setSecurityAlert] = useState<any>(null);
 
+  // COD Collection state
+  const [codInputs, setCodInputs] = useState<Record<string, string>>({});
+  const [submittingCod, setSubmittingCod] = useState<string | null>(null);
+
   const fetchData = async () => {
     try {
       const [profRes, assignRes, earnRes, alertRes] = await Promise.all([
@@ -171,6 +175,44 @@ export const DeliveryDashboard: React.FC = () => {
       }
     } catch (err: any) {
       alert(err.message || 'Failed to update delivery progress');
+    }
+  };
+
+  const handleCollectCod = async (orderId: string, expectedAmount: number) => {
+    const rawVal = codInputs[orderId] !== undefined ? codInputs[orderId] : String(expectedAmount);
+    const amt = Number(rawVal);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Please enter a valid cash amount collected.');
+      return;
+    }
+    setSubmittingCod(orderId);
+    try {
+      const res = await api.submitCodCollection(orderId, amt);
+      if (res.success) {
+        setAssignments((prev) =>
+          prev.map((o) =>
+            o.id === orderId || o.orderNumber === orderId
+              ? {
+                  ...o,
+                  paymentStatus: 'COD_COLLECTED',
+                  codDetails: {
+                    status: 'COLLECTED',
+                    amountExpected: o.totalAmount,
+                    amountCollected: amt,
+                    collectedAt: new Date().toISOString(),
+                    collectedByPartnerId: 'dp_1',
+                    collectedByPartnerName: 'Poopesh M',
+                  },
+                }
+              : o
+          )
+        );
+        alert(`₹${amt} cash collected successfully recorded! Status updated to COD COLLECTED.`);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit COD collection');
+    } finally {
+      setSubmittingCod(null);
     }
   };
 
@@ -448,25 +490,81 @@ export const DeliveryDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Items to Deliver */}
-                    <div className="text-xs space-y-1">
-                      <span className="font-bold text-gray-400 uppercase text-[10px] block">Items in Thermal Box:</span>
+                    {/* Items to Deliver with Quantities and Prices */}
+                    <div className="text-xs space-y-1.5 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-wider pb-1 border-b border-gray-200">
+                        <span>Ordered Cuts</span>
+                        <span>Qty × Price</span>
+                      </div>
                       {order.items.map((it) => (
-                        <div key={it.id} className="flex justify-between text-gray-700">
-                          <span>{it.quantity}x {it.productName} ({it.variantLabel})</span>
-                          <span className="font-bold">Cut: {it.cuttingOption}</span>
+                        <div key={it.id} className="flex justify-between items-center text-gray-700 text-xs">
+                          <div>
+                            <span className="font-semibold text-charcoal">{it.quantity}x {it.productName}</span>
+                            <span className="text-[11px] text-gray-500 block">Pack: {it.variantLabel} • Cut: {it.cuttingOption}</span>
+                          </div>
+                          <span className="font-bold text-charcoal font-mono">₹{it.totalPrice || (it.unitPrice ? it.unitPrice * it.quantity : 0)}</span>
                         </div>
                       ))}
+                      <div className="flex justify-between items-center pt-1.5 border-t border-gray-200 text-xs font-black text-charcoal">
+                        <span>Total Order Amount:</span>
+                        <span className="text-sm font-black text-brand-700">₹{order.totalAmount}</span>
+                      </div>
                     </div>
 
-                    {/* Cash collection alert if COD */}
-                    {isCod && order.paymentStatus !== 'PAID' && (
-                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 flex items-center justify-between">
-                        <div className="flex items-center space-x-1.5">
-                          <Banknote className="w-4 h-4 text-amber-600" />
-                          <span>Collect Cash on Delivery:</span>
+                    {/* Payment Status & Instructions Card */}
+                    {(!isCod || order.paymentStatus === 'PAID') && (
+                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1.5 font-bold">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span className="uppercase text-[11px] tracking-wide text-emerald-800">ONLINE PAYMENT – ALREADY PAID</span>
+                          </div>
+                          <span className="text-sm font-black text-emerald-800">₹{order.totalAmount}</span>
                         </div>
-                        <span className="text-sm font-black text-brand-700">₹{order.totalAmount}</span>
+                        <p className="text-[11px] text-emerald-700">✓ Pre-paid verified online order. Do not collect any money from customer.</p>
+                      </div>
+                    )}
+
+                    {isCod && order.paymentStatus === 'COD_COLLECTED' && (
+                      <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1.5 font-bold">
+                            <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                            <span className="uppercase text-[11px] tracking-wide text-indigo-900">COD CASH COLLECTED: ₹{order.codDetails?.amountCollected || order.totalAmount}</span>
+                          </div>
+                          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded-full font-black">COLLECTED</span>
+                        </div>
+                        <p className="text-[11px] text-indigo-700">Cash received from customer. Awaiting store manager verification & settlement.</p>
+                      </div>
+                    )}
+
+                    {isCod && order.paymentStatus !== 'PAID' && order.paymentStatus !== 'COD_COLLECTED' && (
+                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1.5 font-bold">
+                            <Banknote className="w-4 h-4 text-amber-600" />
+                            <span className="uppercase text-[11px] tracking-wide text-amber-900">COD – PAYMENT PENDING</span>
+                          </div>
+                          <span className="text-sm font-black text-brand-700">Collect ₹{order.totalAmount}</span>
+                        </div>
+                        <p className="text-[11px] text-amber-700">Please collect exact cash from customer before handing over the parcel.</p>
+                        <div className="flex items-center space-x-2 pt-1">
+                          <input
+                            type="number"
+                            value={codInputs[order.id] !== undefined ? codInputs[order.id] : String(order.totalAmount)}
+                            onChange={(e) => setCodInputs({ ...codInputs, [order.id]: e.target.value })}
+                            className="w-28 bg-white border border-amber-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-charcoal outline-none focus:border-amber-600 font-mono"
+                            placeholder="Cash collected"
+                          />
+                          <button
+                            type="button"
+                            disabled={submittingCod === order.id}
+                            onClick={() => handleCollectCod(order.id, order.totalAmount)}
+                            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-1.5 px-3 rounded-xl shadow-sm transition disabled:opacity-50"
+                          >
+                            {submittingCod === order.id ? 'Recording...' : 'Submit Cash Collection'}
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -539,8 +637,8 @@ export const DeliveryDashboard: React.FC = () => {
                           <button
                             onClick={() => {
                               setVerifyingOrderId(order.id);
-                              setEnteredOtp(order.deliveryOtp || '1234');
-                              setCashCollected(isCod ? String(order.totalAmount) : '');
+                              setEnteredOtp('');
+                              setCashCollected(isCod && order.paymentStatus !== 'COD_COLLECTED' ? String(order.totalAmount) : '');
                               setOtpError(null);
                             }}
                             className="w-full bg-green-700 hover:bg-green-800 text-white font-black text-xs py-3 rounded-xl shadow-lg transition flex items-center justify-center space-x-2"
@@ -636,9 +734,9 @@ export const DeliveryDashboard: React.FC = () => {
                 🔑
               </div>
               <h3 className="text-lg font-black text-charcoal">Verify Customer Delivery OTP</h3>
-              <p className="text-xs text-gray-500">Ask the customer for the 4-digit OTP shown on their order tracking screen.</p>
+              <p className="text-xs text-gray-500">Ask the customer for the 4-digit OTP shown on their order tracking screen upon arrival.</p>
               <div className="bg-emerald-50 text-emerald-800 text-[11px] font-bold py-1 px-3 rounded-lg inline-block">
-                Customer OTP: <span className="font-mono text-sm font-extrabold">{assignments.find(a => a.id === verifyingOrderId)?.deliveryOtp || '1234'}</span> (or enter 1234)
+                🔒 Secure Delivery Verification • Ask customer to reveal OTP
               </div>
             </div>
 

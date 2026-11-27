@@ -145,11 +145,29 @@ export const verifyRazorpayPayment = async (req: AuthenticatedRequest, res: Resp
     }
 
     const order = appOrderId ? db.getOrderById(appOrderId) : null;
+    const now = new Date().toISOString();
     if (order) {
       order.paymentStatus = 'PAID';
       order.paymentMethod = 'RAZORPAY';
       order.status = 'CONFIRMED';
-      order.updatedAt = new Date().toISOString();
+      order.paymentDetails = {
+        gateway: 'RAZORPAY',
+        transactionId: finalPaymentId,
+        razorpayPaymentId: finalPaymentId,
+        razorpayOrderId: finalOrderId,
+        razorpaySignature: finalSignature,
+        amount: order.totalAmount,
+        paidAt: now
+      };
+      if (!order.timeline) order.timeline = [];
+      order.timeline.push({
+        event: 'PAYMENT_VERIFIED',
+        title: 'Online Payment Verified (Razorpay)',
+        timestamp: now,
+        actor: 'Razorpay Payment Gateway',
+        details: `₹${order.totalAmount} verified & captured. Txn ID: ${finalPaymentId}`
+      });
+      order.updatedAt = now;
       db.saveToDisk();
     }
 

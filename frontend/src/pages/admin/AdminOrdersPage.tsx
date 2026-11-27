@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Search,
   Filter,
@@ -12,7 +12,10 @@ import {
   RefreshCw,
   X,
   Trash2,
-  CreditCard
+  CreditCard,
+  Banknote,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Order, DeliveryPartner, OrderStatus } from '../../types';
@@ -151,8 +154,13 @@ export const AdminOrdersPage: React.FC = () => {
 
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
     setIsUpdating(true);
+    const targetOrder = orders.find((o) => o.id === orderId || o.orderNumber === orderId);
+    const isCod = targetOrder?.paymentMethod === 'COD';
     const isDelivered = status === 'DELIVERED';
-    const autoPaymentStatus = isDelivered ? 'PAID' : undefined;
+    // For COD, delivery moves to COD_COLLECTED if not already settled to PAID; online moves to PAID
+    const autoPaymentStatus = isDelivered
+      ? (isCod ? (targetOrder?.paymentStatus === 'PAID' ? 'PAID' : 'COD_COLLECTED') : 'PAID')
+      : undefined;
 
     // 1. Optimistic Update: immediately update the order status in state so UI reacts instantly
     setOrders((prev) =>
@@ -234,17 +242,17 @@ export const AdminOrdersPage: React.FC = () => {
     }
   };
 
-  const handlePaymentStatusUpdate = async (orderId: string, paymentStatus: 'PAID' | 'PENDING') => {
+  const handlePaymentStatusUpdate = async (orderId: string, paymentStatus: 'PAID' | 'PENDING' | 'COD_COLLECTED') => {
     setIsUpdating(true);
     setOrders((prev) =>
       prev.map((o) =>
         (o.id === orderId || o.orderNumber === orderId)
-          ? { ...o, paymentStatus, updatedAt: new Date().toISOString() }
+          ? { ...o, paymentStatus: paymentStatus as any, updatedAt: new Date().toISOString() }
           : o
       )
     );
     if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
-      setSelectedOrder((prev) => (prev ? { ...prev, paymentStatus, updatedAt: new Date().toISOString() } : null));
+      setSelectedOrder((prev) => (prev ? { ...prev, paymentStatus: paymentStatus as any, updatedAt: new Date().toISOString() } : null));
     }
 
     try {
@@ -253,6 +261,82 @@ export const AdminOrdersPage: React.FC = () => {
       console.error('Payment update failed:', err);
       alert(err.message || 'Payment status update failed');
       await fetchOrders(true);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSettleCodOrder = async (orderId: string) => {
+    setIsUpdating(true);
+    try {
+      const res = await api.settleCodOrder(orderId);
+      if (res.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId || o.orderNumber === orderId
+              ? {
+                  ...o,
+                  paymentStatus: 'PAID',
+                  codDetails: {
+                    ...(o.codDetails || {
+                      status: 'COLLECTED',
+                      amountExpected: o.totalAmount,
+                      amountCollected: o.totalAmount,
+                      collectedAt: new Date().toISOString(),
+                      collectedByPartnerId: o.deliveryPartnerId || 'dp_1',
+                      collectedByPartnerName: o.deliveryPartnerName || 'Poopesh M',
+                    }),
+                    status: 'SETTLED',
+                    settledAt: new Date().toISOString(),
+                    settledByAdminId: 'Administrator',
+                  },
+                }
+              : o
+          )
+        );
+        if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+          setSelectedOrder((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  paymentStatus: 'PAID',
+                  codDetails: {
+                    ...(prev.codDetails || {
+                      status: 'COLLECTED',
+                      amountExpected: prev.totalAmount,
+                      amountCollected: prev.totalAmount,
+                      collectedAt: new Date().toISOString(),
+                      collectedByPartnerId: prev.deliveryPartnerId || 'dp_1',
+                      collectedByPartnerName: prev.deliveryPartnerName || 'Poopesh M',
+                    }),
+                    status: 'SETTLED',
+                    settledAt: new Date().toISOString(),
+                    settledByAdminId: 'Administrator',
+                  },
+                }
+              : null
+          );
+        }
+        alert('✓ COD cash handover verified and settled to PAID!');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Settlement failed');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSettlePartner = async (partnerId: string) => {
+    if (!window.confirm('Confirm settlement of all collected COD cash for this delivery partner?')) return;
+    setIsUpdating(true);
+    try {
+      const res = await api.settlePartnerCodOrders(partnerId);
+      if (res.success) {
+        await fetchOrders(true);
+        alert(res.message || 'Partner COD orders settled successfully.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Batch partner settlement failed');
     } finally {
       setIsUpdating(false);
     }
@@ -346,6 +430,56 @@ export const AdminOrdersPage: React.FC = () => {
     }
   };
 
+  const paymentStats = useMemo(() => {
+    let onlinePaid = 0;
+    let onlineCount = 0;
+    let codCollected = 0;
+    let codCollectedCount = 0;
+    let codPending = 0;
+    let codPendingCount = 0;
+    let settledRevenue = 0;
+    let deliveredCount = 0;
+    let pendingCount = 0;
+
+    orders.forEach((o) => {
+      const amt = Number(o.totalAmount) || 0;
+      if (o.status === 'DELIVERED') deliveredCount++;
+      else if (o.status !== 'CANCELLED') pendingCount++;
+
+      if (o.paymentMethod === 'ONLINE' || o.paymentMethod === 'RAZORPAY') {
+        if (o.paymentStatus === 'PAID') {
+          onlinePaid += amt;
+          onlineCount++;
+          settledRevenue += amt;
+        }
+      } else {
+        // COD
+        if (o.paymentStatus === 'COD_COLLECTED') {
+          codCollected += amt;
+          codCollectedCount++;
+        } else if (o.paymentStatus === 'PAID') {
+          settledRevenue += amt;
+        } else {
+          codPending += amt;
+          codPendingCount++;
+        }
+      }
+    });
+
+    return {
+      onlinePaid,
+      onlineCount,
+      codCollected,
+      codCollectedCount,
+      codPending,
+      codPendingCount,
+      settledRevenue,
+      deliveredCount,
+      pendingCount,
+      totalOrders: orders.length,
+    };
+  }, [orders]);
+
   const filteredOrders = orders.filter((o) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -413,6 +547,45 @@ export const AdminOrdersPage: React.FC = () => {
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-brand-700' : ''}`} />
             <span>Sync</span>
           </button>
+        </div>
+      </div>
+
+      {/* Payment & COD Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider">Online Paid</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          </div>
+          <span className="text-xl font-black text-charcoal block mt-1">₹{paymentStats.onlinePaid}</span>
+          <span className="text-[11px] text-emerald-700 font-medium">{paymentStats.onlineCount} orders verified</span>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase text-indigo-800 tracking-wider">COD Collected</span>
+            <Banknote className="w-4 h-4 text-indigo-600" />
+          </div>
+          <span className="text-xl font-black text-charcoal block mt-1">₹{paymentStats.codCollected}</span>
+          <span className="text-[11px] text-indigo-700 font-medium">{paymentStats.codCollectedCount} awaiting settlement</span>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-amber-100 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">COD Pending</span>
+            <Clock className="w-4 h-4 text-amber-600" />
+          </div>
+          <span className="text-xl font-black text-charcoal block mt-1">₹{paymentStats.codPending}</span>
+          <span className="text-[11px] text-amber-700 font-medium">{paymentStats.codPendingCount} pending delivery</span>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Settled Revenue</span>
+            <ShieldCheck className="w-4 h-4 text-brand-700" />
+          </div>
+          <span className="text-xl font-black text-brand-700 block mt-1">₹{paymentStats.settledRevenue}</span>
+          <span className="text-[11px] text-gray-500 font-medium">{paymentStats.deliveredCount} delivered orders</span>
         </div>
       </div>
 
@@ -516,12 +689,50 @@ export const AdminOrdersPage: React.FC = () => {
                           className={`text-[9px] font-black px-2 py-0.5 rounded-full inline-flex items-center w-max ${
                             order.paymentStatus === 'PAID'
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : order.paymentStatus === 'COD_COLLECTED'
+                              ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                              : order.paymentStatus === 'REFUNDED'
+                              ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                              : order.paymentStatus === 'FAILED'
+                              ? 'bg-red-100 text-red-900 border border-red-300'
                               : 'bg-amber-100 text-amber-900 border border-amber-300'
                           }`}
                         >
-                          {order.paymentStatus === 'PAID' ? '✓ PAID' : 'PENDING'} • {order.paymentMethod || 'COD'}
+                          {order.paymentStatus === 'PAID'
+                            ? '✓ PAID'
+                            : order.paymentStatus === 'COD_COLLECTED'
+                            ? 'COD COLLECTED'
+                            : order.paymentStatus === 'REFUNDED'
+                            ? 'REFUND'
+                            : order.paymentStatus === 'FAILED'
+                            ? 'FAILED'
+                            : 'PENDING'} • {order.paymentMethod || 'COD'}
                         </span>
-                        {order.paymentStatus !== 'PAID' && (
+
+                        {/* Online Transaction ID */}
+                        {(order.paymentMethod === 'ONLINE' || order.paymentMethod === 'RAZORPAY') && (order.paymentDetails?.transactionId || (order as any).razorpayPaymentId) && (
+                          <span
+                            className="text-[9px] font-mono text-gray-500 truncate max-w-[120px]"
+                            title={order.paymentDetails?.transactionId || (order as any).razorpayPaymentId}
+                          >
+                            Txn: {(order.paymentDetails?.transactionId || (order as any).razorpayPaymentId || '').slice(-8)}
+                          </span>
+                        )}
+
+                        {/* Actions based on payment state */}
+                        {order.paymentStatus === 'COD_COLLECTED' && (
+                          <button
+                            type="button"
+                            disabled={isUpdating}
+                            onClick={() => handleSettleCodOrder(order.id || order.orderNumber)}
+                            className="text-[9px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline text-left inline-flex items-center space-x-1"
+                            title="Verify rider cash handover and mark as PAID"
+                          >
+                            <span>✓ Settle COD Handover</span>
+                          </button>
+                        )}
+
+                        {order.paymentStatus === 'PENDING' && (
                           <button
                             type="button"
                             disabled={isUpdating}
@@ -800,46 +1011,119 @@ export const AdminOrdersPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Payment Status Management Card */}
-            <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Payment Information</p>
-                <div className="flex items-center space-x-2 mt-0.5">
-                  <CreditCard className="w-4 h-4 text-brand-700" />
-                  <span className="font-bold text-xs text-charcoal">{selectedOrder.paymentMethod || 'COD'}</span>
-                  <span
-                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                      selectedOrder.paymentStatus === 'PAID'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : 'bg-amber-100 text-amber-900 border border-amber-300'
-                    }`}
-                  >
-                    {selectedOrder.paymentStatus === 'PAID' ? '✓ PAID' : 'PENDING'}
+            {/* Payment & Delivery Verification Card */}
+            <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Payment Information</p>
+                  <div className="flex items-center space-x-2 mt-0.5">
+                    <CreditCard className="w-4 h-4 text-brand-700" />
+                    <span className="font-bold text-xs text-charcoal">{selectedOrder.paymentMethod || 'COD'}</span>
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                        selectedOrder.paymentStatus === 'PAID'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : selectedOrder.paymentStatus === 'COD_COLLECTED'
+                          ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                          : 'bg-amber-100 text-amber-900 border border-amber-300'
+                      }`}
+                    >
+                      {selectedOrder.paymentStatus === 'PAID'
+                        ? '✓ PAID'
+                        : selectedOrder.paymentStatus === 'COD_COLLECTED'
+                        ? 'COD COLLECTED'
+                        : 'PENDING'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {selectedOrder.paymentStatus === 'COD_COLLECTED' && (
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => handleSettleCodOrder(selectedOrder.id || selectedOrder.orderNumber)}
+                      className="bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition"
+                    >
+                      ✓ Settle COD Handover
+                    </button>
+                  )}
+
+                  {selectedOrder.paymentStatus !== 'PAID' && selectedOrder.paymentStatus !== 'COD_COLLECTED' && (
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => handlePaymentStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PAID')}
+                      className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
+                    >
+                      Mark Paid
+                    </button>
+                  )}
+
+                  {selectedOrder.paymentStatus === 'PAID' && (
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => handlePaymentStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PENDING')}
+                      className="bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-700 font-bold text-xs px-3 py-1.5 rounded-xl transition"
+                    >
+                      Mark Unpaid
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Transaction & Settlement Details */}
+              <div className="pt-2 border-t border-gray-200/70 grid grid-cols-2 gap-2 text-[11px] text-gray-600">
+                {(selectedOrder.paymentMethod === 'ONLINE' || selectedOrder.paymentMethod === 'RAZORPAY') && (
+                  <div>
+                    <span className="text-gray-400 font-bold block text-[10px]">Gateway Transaction ID</span>
+                    <span className="font-mono font-bold text-charcoal truncate block">
+                      {selectedOrder.paymentDetails?.transactionId || (selectedOrder as any).razorpayPaymentId || 'rzp_verified_live'}
+                    </span>
+                  </div>
+                )}
+                {selectedOrder.paymentMethod === 'COD' && (
+                  <div>
+                    <span className="text-gray-400 font-bold block text-[10px]">COD Collection Status</span>
+                    <span className="font-bold text-charcoal">
+                      {selectedOrder.paymentStatus === 'PAID'
+                        ? 'Settled to Store'
+                        : selectedOrder.paymentStatus === 'COD_COLLECTED'
+                        ? `Collected: ₹${selectedOrder.codDetails?.amountCollected || selectedOrder.totalAmount}`
+                        : 'Awaiting cash collection'}
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-gray-400 font-bold block text-[10px]">Delivery OTP Status</span>
+                  <span className={`font-bold ${selectedOrder.status === 'DELIVERED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {selectedOrder.status === 'DELIVERED'
+                      ? '✓ Customer OTP Verified'
+                      : 'Pending Customer OTP on Delivery'}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                {selectedOrder.paymentStatus !== 'PAID' ? (
-                  <button
-                    type="button"
-                    disabled={isUpdating}
-                    onClick={() => handlePaymentStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PAID')}
-                    className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition"
-                  >
-                    Mark Paid (Cash Collected)
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isUpdating}
-                    onClick={() => handlePaymentStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PENDING')}
-                    className="bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-700 font-bold text-xs px-3 py-1.5 rounded-xl transition"
-                  >
-                    Mark Unpaid
-                  </button>
-                )}
-              </div>
+              {/* Audit Log / Timeline */}
+              {Array.isArray(selectedOrder.timeline) && selectedOrder.timeline.length > 0 && (
+                <div className="pt-2 border-t border-gray-200/70 space-y-1">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Order Audit Log</span>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {selectedOrder.timeline.map((evt: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-start text-[10px] text-gray-500 bg-white p-1.5 rounded-lg border border-gray-100">
+                        <div>
+                          <span className="font-bold text-charcoal">{evt.title}</span>
+                          {evt.details && <p className="text-[10px] text-gray-500">{evt.details}</p>}
+                        </div>
+                        <span className="font-mono text-gray-400 flex-shrink-0">
+                          {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Print Invoice & Delete Action */}

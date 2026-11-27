@@ -304,7 +304,11 @@ export const adminUpdateOrderStatus = (req: AuthenticatedRequest, res: Response)
   if (status === 'PICKED_UP') updates.pickedUpAt = now;
   if (status === 'DELIVERED') {
     updates.deliveredAt = now;
-    updates.paymentStatus = 'PAID';
+    if (order.paymentMethod === 'RAZORPAY') {
+      updates.paymentStatus = 'PAID';
+    } else if (order.paymentStatus !== 'PAID') {
+      updates.paymentStatus = 'COD_COLLECTED';
+    }
   }
   if (status === 'CANCELLED') {
     updates.cancelledAt = now;
@@ -317,9 +321,200 @@ export const adminUpdateOrderStatus = (req: AuthenticatedRequest, res: Response)
     db.releaseStock(order.items.map((it) => ({ variantId: it.variantId, quantity: it.quantity })));
   }
 
+  if (updates.status && updates.status !== order.status) {
+    if (!order.timeline) order.timeline = [];
+    order.timeline.push({
+      event: `STATUS_${updates.status}`,
+      title: `Order Status Changed to ${updates.status.replace(/_/g, ' ')}`,
+      timestamp: now,
+      actor: req.user?.name || 'Administrator',
+      details: rejectionReason || cancellationReason || undefined
+    });
+  }
+
   const updatedOrder = db.updateOrder(order.id, updates);
   db.saveToDisk();
   return res.json({ success: true, message: `Order updated successfully`, data: updatedOrder });
+};
+
+export const adminSettleCodOrder = (req: AuthenticatedRequest, res: Response) => {
+  const id = String(req.params.id);
+  const order = db.getOrderById(id);
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  const now = new Date().toISOString();
+  order.paymentStatus = 'PAID';
+  order.codDetails = {
+    ...(order.codDetails || {
+      status: 'COLLECTED',
+      amountExpected: order.totalAmount,
+      amountCollected: order.totalAmount,
+      collectedAt: now,
+      collectedByPartnerId: order.deliveryPartnerId || 'dp_1',
+      collectedByPartnerName: order.deliveryPartnerName || 'Delivery Partner'
+    }),
+    status: 'SETTLED',
+    settledAt: now,
+    settledByAdminId: req.user?.name || 'Administrator',
+    settlementNotes: req.body?.notes || 'COD cash handover verified by store admin'
+  };
+
+  if (!order.timeline) order.timeline = [];
+  order.timeline.push({
+    event: 'COD_SETTLED',
+    title: 'COD Handover Verified & Settled to PAID',
+    timestamp: now,
+    actor: req.user?.name || 'Administrator',
+    details: `₹${order.totalAmount} cash settled to Meat Corner store account`
+  });
+  order.updatedAt = now;
+
+  db.saveToDisk();
+
+  return res.json({
+    success: true,
+    message: `Order #${order.orderNumber} COD collection verified and settled as PAID!`,
+    data: order
+  });
+};
+
+export const adminSettlePartnerCodOrders = (req: AuthenticatedRequest, res: Response) => {
+  const { partnerId } = req.body;
+  if (!partnerId) {
+    return res.status(400).json({ success: false, message: 'Please provide partnerId' });
+  }
+
+  const partner = db.deliveryPartners.find((p) => p.id === partnerId);
+  const now = new Date().toISOString();
+  let settledCount = 0;
+  let totalSettled = 0;
+
+  db.orders.forEach((o) => {
+    if (
+      o.deliveryPartnerId === partnerId &&
+      o.paymentMethod === 'COD' &&
+      o.paymentStatus === 'COD_COLLECTED'
+    ) {
+      o.paymentStatus = 'PAID';
+      o.codDetails = {
+        ...(o.codDetails || { status: 'COLLECTED', amountExpected: o.totalAmount, amountCollected: o.totalAmount }),
+        status: 'SETTLED',
+        settledAt: now,
+        settledByAdminId: req.user?.name || 'Administrator',
+        settlementNotes: `Batch settlement for ${partner?.fullName || partnerId}`
+      };
+      if (!o.timeline) o.timeline = [];
+      o.timeline.push({
+        event: 'COD_SETTLED',
+        title: 'Partner Batch COD Settlement',
+        timestamp: now,
+        actor: req.user?.name || 'Administrator',
+        details: `Batch cash settlement verified for ${partner?.fullName || partnerId}`
+      });
+      o.updatedAt = now;
+      settledCount++;
+      totalSettled += o.totalAmount;
+    }
+  });
+
+  db.saveToDisk();
+
+  return res.json({
+    success: true,
+    message: `Successfully settled ${settledCount} COD orders totaling ₹${totalSettled} from ${partner?.fullName || 'delivery partner'}.`,
+    settledCount,
+    totalSettled
+  });
+};
+
+export const adminGetPaymentSummary = (req: AuthenticatedRequest, res: Response) => {
+  const { startDate, endDate } = req.query;
+
+  let orders = [...db.orders];
+  if (startDate) {
+    const s = new Date(startDate as string).getTime();
+    orders = orders.filter((o) => new Date(o.createdAt).getTime() >= s);
+  }
+  if (endDate) {
+    const e = new Date(endDate as string).getTime();
+    orders = orders.filter((o) => new Date(o.createdAt).getTime() <= e);
+  }
+
+  let totalOnlinePaid = 0;
+  let onlineCount = 0;
+  let totalCodCollected = 0;
+  let codCollectedCount = 0;
+  let totalCodPending = 0;
+  let codPendingCount = 0;
+  let totalSettledRevenue = 0;
+  let deliveredOrdersCount = 0;
+  let pendingOrdersCount = 0;
+
+  const partnerMap: Record<string, { partnerId: string; partnerName: string; totalCollected: number; totalSettled: number; pendingHandover: number; orderCount: number }> = {};
+
+  orders.forEach((o) => {
+    const amt = Number(o.totalAmount) || 0;
+    if (o.status === 'DELIVERED') deliveredOrdersCount++;
+    else if (o.status !== 'CANCELLED' && o.status !== 'REJECTED') pendingOrdersCount++;
+
+    if (o.paymentMethod === 'RAZORPAY') {
+      if (o.paymentStatus === 'PAID') {
+        totalOnlinePaid += amt;
+        onlineCount++;
+        totalSettledRevenue += amt;
+      }
+    } else if (o.paymentMethod === 'COD') {
+      if (o.paymentStatus === 'PAID') {
+        totalSettledRevenue += amt;
+      } else if (o.paymentStatus === 'COD_COLLECTED') {
+        totalCodCollected += (o.codDetails?.amountCollected || amt);
+        codCollectedCount++;
+      } else if (o.paymentStatus === 'PENDING') {
+        totalCodPending += amt;
+        codPendingCount++;
+      }
+
+      if (o.deliveryPartnerId) {
+        if (!partnerMap[o.deliveryPartnerId]) {
+          partnerMap[o.deliveryPartnerId] = {
+            partnerId: o.deliveryPartnerId,
+            partnerName: o.deliveryPartnerName || 'Assigned Rider',
+            totalCollected: 0,
+            totalSettled: 0,
+            pendingHandover: 0,
+            orderCount: 0
+          };
+        }
+        const pRecord = partnerMap[o.deliveryPartnerId];
+        pRecord.orderCount++;
+        if (o.paymentStatus === 'COD_COLLECTED') {
+          pRecord.totalCollected += (o.codDetails?.amountCollected || amt);
+          pRecord.pendingHandover += (o.codDetails?.amountCollected || amt);
+        } else if (o.paymentStatus === 'PAID') {
+          pRecord.totalCollected += amt;
+          pRecord.totalSettled += amt;
+        }
+      }
+    }
+  });
+
+  return res.json({
+    success: true,
+    data: {
+      totalRevenue: totalSettledRevenue,
+      totalOnlinePaid,
+      onlineCount,
+      totalCodCollected,
+      codCollectedCount,
+      totalCodPending,
+      codPendingCount,
+      totalDelivered: deliveredOrdersCount,
+      totalPending: pendingOrdersCount,
+      partnerBreakdown: Object.values(partnerMap)
+    }
+  });
 };
 
 export const adminDeleteOrder = (req: AuthenticatedRequest, res: Response) => {
@@ -331,7 +526,6 @@ export const adminDeleteOrder = (req: AuthenticatedRequest, res: Response) => {
 
   const order = db.orders[idx];
   db.orders.splice(idx, 1);
-  db.orderItems = db.orderItems.filter((oi) => oi.orderId !== order.id);
   db.deliveryAssignments = db.deliveryAssignments.filter((da) => da.orderId !== order.id);
 
   db.saveToDisk();

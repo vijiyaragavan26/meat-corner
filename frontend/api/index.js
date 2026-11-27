@@ -35485,7 +35485,11 @@ var adminUpdateOrderStatus = (req, res) => {
   if (status === "PICKED_UP") updates.pickedUpAt = now;
   if (status === "DELIVERED") {
     updates.deliveredAt = now;
-    updates.paymentStatus = "PAID";
+    if (order.paymentMethod === "RAZORPAY") {
+      updates.paymentStatus = "PAID";
+    } else if (order.paymentStatus !== "PAID") {
+      updates.paymentStatus = "COD_COLLECTED";
+    }
   }
   if (status === "CANCELLED") {
     updates.cancelledAt = now;
@@ -35496,9 +35500,177 @@ var adminUpdateOrderStatus = (req, res) => {
     updates.rejectionReason = rejectionReason || "Store unable to fulfil order";
     db.releaseStock(order.items.map((it) => ({ variantId: it.variantId, quantity: it.quantity })));
   }
+  if (updates.status && updates.status !== order.status) {
+    if (!order.timeline) order.timeline = [];
+    order.timeline.push({
+      event: `STATUS_${updates.status}`,
+      title: `Order Status Changed to ${updates.status.replace(/_/g, " ")}`,
+      timestamp: now,
+      actor: req.user?.name || "Administrator",
+      details: rejectionReason || cancellationReason || void 0
+    });
+  }
   const updatedOrder = db.updateOrder(order.id, updates);
   db.saveToDisk();
   return res.json({ success: true, message: `Order updated successfully`, data: updatedOrder });
+};
+var adminSettleCodOrder = (req, res) => {
+  const id = String(req.params.id);
+  const order = db.getOrderById(id);
+  if (!order) {
+    return res.status(404).json({ success: false, message: "Order not found" });
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  order.paymentStatus = "PAID";
+  order.codDetails = {
+    ...order.codDetails || {
+      status: "COLLECTED",
+      amountExpected: order.totalAmount,
+      amountCollected: order.totalAmount,
+      collectedAt: now,
+      collectedByPartnerId: order.deliveryPartnerId || "dp_1",
+      collectedByPartnerName: order.deliveryPartnerName || "Delivery Partner"
+    },
+    status: "SETTLED",
+    settledAt: now,
+    settledByAdminId: req.user?.name || "Administrator",
+    settlementNotes: req.body?.notes || "COD cash handover verified by store admin"
+  };
+  if (!order.timeline) order.timeline = [];
+  order.timeline.push({
+    event: "COD_SETTLED",
+    title: "COD Handover Verified & Settled to PAID",
+    timestamp: now,
+    actor: req.user?.name || "Administrator",
+    details: `\u20B9${order.totalAmount} cash settled to Meat Corner store account`
+  });
+  order.updatedAt = now;
+  db.saveToDisk();
+  return res.json({
+    success: true,
+    message: `Order #${order.orderNumber} COD collection verified and settled as PAID!`,
+    data: order
+  });
+};
+var adminSettlePartnerCodOrders = (req, res) => {
+  const { partnerId } = req.body;
+  if (!partnerId) {
+    return res.status(400).json({ success: false, message: "Please provide partnerId" });
+  }
+  const partner = db.deliveryPartners.find((p) => p.id === partnerId);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  let settledCount = 0;
+  let totalSettled = 0;
+  db.orders.forEach((o) => {
+    if (o.deliveryPartnerId === partnerId && o.paymentMethod === "COD" && o.paymentStatus === "COD_COLLECTED") {
+      o.paymentStatus = "PAID";
+      o.codDetails = {
+        ...o.codDetails || { status: "COLLECTED", amountExpected: o.totalAmount, amountCollected: o.totalAmount },
+        status: "SETTLED",
+        settledAt: now,
+        settledByAdminId: req.user?.name || "Administrator",
+        settlementNotes: `Batch settlement for ${partner?.fullName || partnerId}`
+      };
+      if (!o.timeline) o.timeline = [];
+      o.timeline.push({
+        event: "COD_SETTLED",
+        title: "Partner Batch COD Settlement",
+        timestamp: now,
+        actor: req.user?.name || "Administrator",
+        details: `Batch cash settlement verified for ${partner?.fullName || partnerId}`
+      });
+      o.updatedAt = now;
+      settledCount++;
+      totalSettled += o.totalAmount;
+    }
+  });
+  db.saveToDisk();
+  return res.json({
+    success: true,
+    message: `Successfully settled ${settledCount} COD orders totaling \u20B9${totalSettled} from ${partner?.fullName || "delivery partner"}.`,
+    settledCount,
+    totalSettled
+  });
+};
+var adminGetPaymentSummary = (req, res) => {
+  const { startDate, endDate } = req.query;
+  let orders = [...db.orders];
+  if (startDate) {
+    const s = new Date(startDate).getTime();
+    orders = orders.filter((o) => new Date(o.createdAt).getTime() >= s);
+  }
+  if (endDate) {
+    const e = new Date(endDate).getTime();
+    orders = orders.filter((o) => new Date(o.createdAt).getTime() <= e);
+  }
+  let totalOnlinePaid = 0;
+  let onlineCount = 0;
+  let totalCodCollected = 0;
+  let codCollectedCount = 0;
+  let totalCodPending = 0;
+  let codPendingCount = 0;
+  let totalSettledRevenue = 0;
+  let deliveredOrdersCount = 0;
+  let pendingOrdersCount = 0;
+  const partnerMap = {};
+  orders.forEach((o) => {
+    const amt = Number(o.totalAmount) || 0;
+    if (o.status === "DELIVERED") deliveredOrdersCount++;
+    else if (o.status !== "CANCELLED" && o.status !== "REJECTED") pendingOrdersCount++;
+    if (o.paymentMethod === "RAZORPAY") {
+      if (o.paymentStatus === "PAID") {
+        totalOnlinePaid += amt;
+        onlineCount++;
+        totalSettledRevenue += amt;
+      }
+    } else if (o.paymentMethod === "COD") {
+      if (o.paymentStatus === "PAID") {
+        totalSettledRevenue += amt;
+      } else if (o.paymentStatus === "COD_COLLECTED") {
+        totalCodCollected += o.codDetails?.amountCollected || amt;
+        codCollectedCount++;
+      } else if (o.paymentStatus === "PENDING") {
+        totalCodPending += amt;
+        codPendingCount++;
+      }
+      if (o.deliveryPartnerId) {
+        if (!partnerMap[o.deliveryPartnerId]) {
+          partnerMap[o.deliveryPartnerId] = {
+            partnerId: o.deliveryPartnerId,
+            partnerName: o.deliveryPartnerName || "Assigned Rider",
+            totalCollected: 0,
+            totalSettled: 0,
+            pendingHandover: 0,
+            orderCount: 0
+          };
+        }
+        const pRecord = partnerMap[o.deliveryPartnerId];
+        pRecord.orderCount++;
+        if (o.paymentStatus === "COD_COLLECTED") {
+          pRecord.totalCollected += o.codDetails?.amountCollected || amt;
+          pRecord.pendingHandover += o.codDetails?.amountCollected || amt;
+        } else if (o.paymentStatus === "PAID") {
+          pRecord.totalCollected += amt;
+          pRecord.totalSettled += amt;
+        }
+      }
+    }
+  });
+  return res.json({
+    success: true,
+    data: {
+      totalRevenue: totalSettledRevenue,
+      totalOnlinePaid,
+      onlineCount,
+      totalCodCollected,
+      codCollectedCount,
+      totalCodPending,
+      codPendingCount,
+      totalDelivered: deliveredOrdersCount,
+      totalPending: pendingOrdersCount,
+      partnerBreakdown: Object.values(partnerMap)
+    }
+  });
 };
 var adminDeleteOrder = (req, res) => {
   const id = String(req.params.id);
@@ -35508,7 +35680,6 @@ var adminDeleteOrder = (req, res) => {
   }
   const order = db.orders[idx];
   db.orders.splice(idx, 1);
-  db.orderItems = db.orderItems.filter((oi) => oi.orderId !== order.id);
   db.deliveryAssignments = db.deliveryAssignments.filter((da) => da.orderId !== order.id);
   db.saveToDisk();
   return res.json({ success: true, message: `Order #${order.orderNumber} deleted permanently` });
@@ -35551,8 +35722,11 @@ router4.post("/", authenticateJwt, createOrder);
 router4.get("/", authenticateJwt, getCustomerOrders);
 router4.get("/:id", getOrderById);
 router4.get("/admin/all", authenticateJwt, requireRole(["ADMIN"]), adminGetOrders);
+router4.get("/admin/payment-summary", authenticateJwt, requireRole(["ADMIN"]), adminGetPaymentSummary);
 router4.patch("/admin/:id/status", authenticateJwt, requireRole(["ADMIN"]), adminUpdateOrderStatus);
 router4.post("/admin/:id/assign-partner", authenticateJwt, requireRole(["ADMIN"]), adminAssignDeliveryPartner);
+router4.post("/admin/:id/settle-cod", authenticateJwt, requireRole(["ADMIN"]), adminSettleCodOrder);
+router4.post("/admin/settle-partner-cod", authenticateJwt, requireRole(["ADMIN"]), adminSettlePartnerCodOrders);
 router4.delete("/admin/:id", authenticateJwt, requireRole(["ADMIN"]), adminDeleteOrder);
 var orderRoutes_default = router4;
 
@@ -35861,6 +36035,56 @@ var updateDeliveryOrderStatus = (req, res) => {
     data: order
   });
 };
+var submitCodCollection = (req, res) => {
+  const partner = getPartner(req);
+  const id = String(req.params.id);
+  const { amountCollected } = req.body;
+  if (!partner) {
+    return res.status(404).json({ success: false, message: "Delivery partner not found" });
+  }
+  const order = db.getOrderById(id);
+  if (!order || order.deliveryPartnerId !== partner.id) {
+    return res.status(404).json({ success: false, message: "Order not found or not assigned to you" });
+  }
+  if (order.paymentMethod !== "COD") {
+    return res.status(400).json({ success: false, message: "This is an online paid order. No cash collection required." });
+  }
+  if (order.codDetails?.status === "COLLECTED" || order.codDetails?.status === "SETTLED" || order.paymentStatus === "COD_COLLECTED" || order.paymentStatus === "PAID") {
+    return res.status(400).json({
+      success: false,
+      message: "Cash has already been submitted for this order. Duplicate submissions are not allowed."
+    });
+  }
+  const collected = Number(amountCollected);
+  if (isNaN(collected) || collected <= 0) {
+    return res.status(400).json({ success: false, message: "Please enter a valid cash amount collected." });
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  order.paymentStatus = "COD_COLLECTED";
+  order.codDetails = {
+    status: "COLLECTED",
+    amountExpected: order.totalAmount,
+    amountCollected: collected,
+    collectedAt: now,
+    collectedByPartnerId: partner.id,
+    collectedByPartnerName: partner.fullName
+  };
+  if (!order.timeline) order.timeline = [];
+  order.timeline.push({
+    event: "COD_COLLECTED",
+    title: "Cash Collected by Delivery Partner",
+    timestamp: now,
+    actor: partner.fullName,
+    details: `\u20B9${collected} cash collected from customer. Awaiting store verification.`
+  });
+  order.updatedAt = now;
+  db.saveToDisk();
+  return res.json({
+    success: true,
+    message: `\u20B9${collected} cash collection recorded successfully! Awaiting store admin settlement.`,
+    data: order
+  });
+};
 var verifyDeliveryOtp = (req, res) => {
   const partner = getPartner(req);
   const id = String(req.params.id);
@@ -35875,26 +36099,50 @@ var verifyDeliveryOtp = (req, res) => {
   if (order.status === "DELIVERED") {
     return res.status(400).json({ success: false, message: "Order is already delivered." });
   }
-  const isOtpMatch = otp && (String(otp).trim() === String(order.deliveryOtp).trim() || String(otp).trim() === "1234" || String(otp).trim() === "0000");
-  if (!isOtpMatch) {
-    return res.status(400).json({
+  if ((order.deliveryOtpAttempts || 0) >= 5) {
+    return res.status(403).json({
       success: false,
-      message: `Invalid delivery OTP! Customer OTP is ${order.deliveryOtp} (or enter demo code 1234).`
+      message: "Too many incorrect delivery OTP attempts! Order delivery has been locked for security. Please contact Admin."
     });
   }
-  if (order.paymentMethod === "COD") {
-    if (!cashCollected || Number(cashCollected) < order.totalAmount) {
-      return res.status(400).json({
-        success: false,
-        message: `Please confirm collection of full cash amount \u20B9${order.totalAmount}`
-      });
-    }
-    order.paymentStatus = "PAID";
+  const cleanOtp = String(otp || "").trim();
+  const isOtpMatch = cleanOtp && cleanOtp === String(order.deliveryOtp).trim();
+  if (!isOtpMatch) {
+    order.deliveryOtpAttempts = (order.deliveryOtpAttempts || 0) + 1;
+    db.saveToDisk();
+    const remaining = Math.max(0, 5 - order.deliveryOtpAttempts);
+    return res.status(400).json({
+      success: false,
+      message: `Invalid Delivery OTP! Please ask the customer to check their order confirmation screen. (${remaining} attempts remaining)`
+    });
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
+  if (order.paymentMethod === "COD") {
+    const collectedAmt = Number(cashCollected) || order.totalAmount;
+    if (order.paymentStatus !== "COD_COLLECTED" && order.paymentStatus !== "PAID") {
+      order.paymentStatus = "COD_COLLECTED";
+      order.codDetails = {
+        status: "COLLECTED",
+        amountExpected: order.totalAmount,
+        amountCollected: collectedAmt,
+        collectedAt: now,
+        collectedByPartnerId: partner.id,
+        collectedByPartnerName: partner.fullName
+      };
+    }
+  }
   order.status = "DELIVERED";
   order.deliveredAt = now;
+  order.deliveryOtpVerifiedAt = now;
   order.updatedAt = now;
+  if (!order.timeline) order.timeline = [];
+  order.timeline.push({
+    event: "DELIVERY_COMPLETED",
+    title: "Customer OTP Verified & Order Delivered",
+    timestamp: now,
+    actor: partner.fullName,
+    details: "Order handed over to customer and verified with secure OTP"
+  });
   const baseFee = 40;
   const distanceBonus = Math.max(0, Math.round((order.distanceKm - 2) * 8));
   const tipAmount = 10;
@@ -35916,7 +36164,7 @@ var verifyDeliveryOtp = (req, res) => {
   db.saveToDisk();
   return res.json({
     success: true,
-    message: `Delivery completed successfully! Earning of \u20B9${totalEarning} credited to your Meat Corner wallet.`,
+    message: `Delivery completed successfully! Customer OTP verified. Earning of \u20B9${totalEarning} credited to your Meat Corner wallet.`,
     data: {
       order,
       earning: {
@@ -35967,6 +36215,7 @@ router6.get("/assignments", getAssignedOrders);
 router6.post("/assignments/:id/accept", acceptAssignment);
 router6.post("/assignments/:id/reject", rejectAssignment);
 router6.patch("/orders/:id/status", updateDeliveryOrderStatus);
+router6.post("/orders/:id/collect-cod", submitCodCollection);
 router6.post("/orders/:id/verify-otp", verifyDeliveryOtp);
 router6.post("/location", updateGpsLocation);
 router6.get("/earnings", getEarnings);

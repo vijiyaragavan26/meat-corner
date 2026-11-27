@@ -146,6 +146,39 @@ export type OrderStatus =
   | 'CANCELLED'
   | 'REJECTED';
 
+export type PaymentStatus = 'PENDING' | 'PAID' | 'COD_COLLECTED' | 'REFUND' | 'REFUNDED' | 'FAILED' | 'PARTIALLY_REFUNDED';
+
+export interface PaymentDetails {
+  gateway: 'RAZORPAY' | 'COD';
+  transactionId?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  amount?: number;
+  paidAt?: string;
+}
+
+export interface CodDetails {
+  status: 'PENDING' | 'COLLECTED' | 'SETTLED';
+  amountExpected?: number;
+  amountCollected?: number;
+  collectedAt?: string;
+  collectedByPartnerId?: string;
+  collectedByPartnerName?: string;
+  settledAt?: string;
+  settledByAdminId?: string;
+  settlementNotes?: string;
+}
+
+export interface OrderAuditLog {
+  id?: string;
+  event: string;
+  title: string;
+  timestamp: string;
+  actor: string;
+  details?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -160,7 +193,10 @@ export interface Order {
   deliveryPartnerPhone?: string | null;
   status: OrderStatus;
   paymentMethod: 'RAZORPAY' | 'COD';
-  paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
+  paymentStatus: PaymentStatus;
+  paymentDetails?: PaymentDetails;
+  codDetails?: CodDetails;
+  timeline?: OrderAuditLog[];
   subtotal: number;
   deliveryCharge: number;
   discountAmount: number;
@@ -170,6 +206,8 @@ export interface Order {
   deliveryInstructions?: string;
   deliverySlot: string;
   deliveryOtp: string;
+  deliveryOtpAttempts?: number;
+  deliveryOtpVerifiedAt?: string | null;
   distanceKm: number;
   estimatedMinutes: number;
   rejectionReason?: string | null;

@@ -189,6 +189,66 @@ export const updateDeliveryOrderStatus = (req: AuthenticatedRequest, res: Respon
   });
 };
 
+export const submitCodCollection = (req: AuthenticatedRequest, res: Response) => {
+  const partner = getPartner(req);
+  const id = String(req.params.id);
+  const { amountCollected } = req.body;
+
+  if (!partner) {
+    return res.status(404).json({ success: false, message: 'Delivery partner not found' });
+  }
+
+  const order = db.getOrderById(id);
+  if (!order || order.deliveryPartnerId !== partner.id) {
+    return res.status(404).json({ success: false, message: 'Order not found or not assigned to you' });
+  }
+
+  if (order.paymentMethod !== 'COD') {
+    return res.status(400).json({ success: false, message: 'This is an online paid order. No cash collection required.' });
+  }
+
+  if (order.codDetails?.status === 'COLLECTED' || order.codDetails?.status === 'SETTLED' || order.paymentStatus === 'COD_COLLECTED' || order.paymentStatus === 'PAID') {
+    return res.status(400).json({
+      success: false,
+      message: 'Cash has already been submitted for this order. Duplicate submissions are not allowed.'
+    });
+  }
+
+  const collected = Number(amountCollected);
+  if (isNaN(collected) || collected <= 0) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid cash amount collected.' });
+  }
+
+  const now = new Date().toISOString();
+  order.paymentStatus = 'COD_COLLECTED';
+  order.codDetails = {
+    status: 'COLLECTED',
+    amountExpected: order.totalAmount,
+    amountCollected: collected,
+    collectedAt: now,
+    collectedByPartnerId: partner.id,
+    collectedByPartnerName: partner.fullName
+  };
+
+  if (!order.timeline) order.timeline = [];
+  order.timeline.push({
+    event: 'COD_COLLECTED',
+    title: 'Cash Collected by Delivery Partner',
+    timestamp: now,
+    actor: partner.fullName,
+    details: `₹${collected} cash collected from customer. Awaiting store verification.`
+  });
+  order.updatedAt = now;
+
+  db.saveToDisk();
+
+  return res.json({
+    success: true,
+    message: `₹${collected} cash collection recorded successfully! Awaiting store admin settlement.`,
+    data: order
+  });
+};
+
 export const verifyDeliveryOtp = (req: AuthenticatedRequest, res: Response) => {
   const partner = getPartner(req);
   const id = String(req.params.id);
@@ -207,34 +267,58 @@ export const verifyDeliveryOtp = (req: AuthenticatedRequest, res: Response) => {
     return res.status(400).json({ success: false, message: 'Order is already delivered.' });
   }
 
-  const isOtpMatch =
-    otp &&
-    (String(otp).trim() === String(order.deliveryOtp).trim() ||
-      String(otp).trim() === '1234' ||
-      String(otp).trim() === '0000');
-
-  if (!isOtpMatch) {
-    return res.status(400).json({
+  // Security attempt limiter (max 5 incorrect attempts)
+  if ((order.deliveryOtpAttempts || 0) >= 5) {
+    return res.status(403).json({
       success: false,
-      message: `Invalid delivery OTP! Customer OTP is ${order.deliveryOtp} (or enter demo code 1234).`
+      message: 'Too many incorrect delivery OTP attempts! Order delivery has been locked for security. Please contact Admin.'
     });
   }
 
-  // For COD, validate collected cash amount
-  if (order.paymentMethod === 'COD') {
-    if (!cashCollected || Number(cashCollected) < order.totalAmount) {
-      return res.status(400).json({
-        success: false,
-        message: `Please confirm collection of full cash amount ₹${order.totalAmount}`
-      });
-    }
-    order.paymentStatus = 'PAID';
+  const cleanOtp = String(otp || '').trim();
+  const isOtpMatch = cleanOtp && cleanOtp === String(order.deliveryOtp).trim();
+
+  if (!isOtpMatch) {
+    order.deliveryOtpAttempts = (order.deliveryOtpAttempts || 0) + 1;
+    db.saveToDisk();
+    const remaining = Math.max(0, 5 - order.deliveryOtpAttempts);
+    return res.status(400).json({
+      success: false,
+      message: `Invalid Delivery OTP! Please ask the customer to check their order confirmation screen. (${remaining} attempts remaining)`
+    });
   }
 
   const now = new Date().toISOString();
+
+  // If order is COD and cash wasn't previously submitted, record it as COD_COLLECTED
+  if (order.paymentMethod === 'COD') {
+    const collectedAmt = Number(cashCollected) || order.totalAmount;
+    if (order.paymentStatus !== 'COD_COLLECTED' && order.paymentStatus !== 'PAID') {
+      order.paymentStatus = 'COD_COLLECTED';
+      order.codDetails = {
+        status: 'COLLECTED',
+        amountExpected: order.totalAmount,
+        amountCollected: collectedAmt,
+        collectedAt: now,
+        collectedByPartnerId: partner.id,
+        collectedByPartnerName: partner.fullName
+      };
+    }
+  }
+
   order.status = 'DELIVERED';
   order.deliveredAt = now;
+  order.deliveryOtpVerifiedAt = now;
   order.updatedAt = now;
+
+  if (!order.timeline) order.timeline = [];
+  order.timeline.push({
+    event: 'DELIVERY_COMPLETED',
+    title: 'Customer OTP Verified & Order Delivered',
+    timestamp: now,
+    actor: partner.fullName,
+    details: 'Order handed over to customer and verified with secure OTP'
+  });
 
   // Calculate and award delivery partner earnings
   const baseFee = 40;
@@ -262,7 +346,7 @@ export const verifyDeliveryOtp = (req: AuthenticatedRequest, res: Response) => {
 
   return res.json({
     success: true,
-    message: `Delivery completed successfully! Earning of ₹${totalEarning} credited to your Meat Corner wallet.`,
+    message: `Delivery completed successfully! Customer OTP verified. Earning of ₹${totalEarning} credited to your Meat Corner wallet.`,
     data: {
       order,
       earning: {
