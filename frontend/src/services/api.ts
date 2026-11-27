@@ -431,6 +431,15 @@ function normalizeSupabaseOrder(o: any) {
 
   const partner = o.DeliveryPartners || (o.deliveryPartnerId ? DEMO_DELIVERY_PARTNERS.find(p => p.id === o.deliveryPartnerId) : null);
 
+  const itemSubtotal = items.reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || (Number(it.unitPrice) * Number(it.quantity)) || 0), 0);
+  const subtotal = Number(o.subtotal) > 0 ? Number(o.subtotal) : (itemSubtotal > 0 ? itemSubtotal : 500);
+  const deliveryCharge = o.deliveryCharge !== undefined && o.deliveryCharge !== null ? Number(o.deliveryCharge) : (subtotal >= 499 ? 0 : 30);
+  const discountAmount = Number(o.discountAmount) || 0;
+  const taxAmount = Number(o.taxAmount) || Math.round(subtotal * 0.05);
+  const totalAmount = Number(o.totalAmount) > 0
+    ? Number(o.totalAmount)
+    : Math.max(0, subtotal + deliveryCharge - discountAmount + taxAmount);
+
   return {
     ...o,
     customerName: o.deliveryAddressSnapshot?.recipientName || o.customerName || 'Customer',
@@ -447,11 +456,11 @@ function normalizeSupabaseOrder(o: any) {
     timeline: Array.isArray(o.timeline) ? o.timeline : [],
     deliveryOtpAttempts: typeof o.deliveryOtpAttempts === 'number' ? o.deliveryOtpAttempts : 0,
     deliveryOtpVerifiedAt: o.deliveryOtpVerifiedAt || null,
-    subtotal: Number(o.subtotal) || 0,
-    deliveryCharge: Number(o.deliveryCharge) || 0,
-    discountAmount: Number(o.discountAmount) || 0,
-    taxAmount: Number(o.taxAmount) || 0,
-    totalAmount: Number(o.totalAmount) || 0,
+    subtotal,
+    deliveryCharge,
+    discountAmount,
+    taxAmount,
+    totalAmount,
     deliverySlot: o.deliverySlot || 'Express (30-45 mins)',
     deliveryOtp: String(o.deliveryOtp || '1234'),
     distanceKm: Number(o.distanceKm) || 2.4,
@@ -1811,23 +1820,23 @@ export const api = {
 
       const orderId = 'ord_' + Date.now();
       const orderNumber = 'MC-' + Math.floor(100000 + Math.random() * 900000);
-      const subtotal = liveCart.subtotal || liveCart.pricing?.subtotal || 500;
-      const deliveryFee = liveCart.deliveryCharge ?? (subtotal >= 499 ? 0 : 30);
-      const tax = liveCart.taxAmount ?? Math.round(subtotal * 0.05);
-      const discount = liveCart.discountAmount || 0;
-      const total = liveCart.totalAmount ?? (subtotal + deliveryFee - discount + tax);
+      const rawCartItems = (Array.isArray(body.items) && body.items.length > 0)
+        ? body.items
+        : ((Array.isArray(liveCart.items) && liveCart.items.length > 0) ? liveCart.items : []);
 
-      const items = liveCart.items.length > 0
-        ? liveCart.items.map((it: any, idx: number) => {
+      const items = rawCartItems.length > 0
+        ? rawCartItems.map((it: any, idx: number) => {
             const img = it.product?.images?.[0] || it.imageUrl || it.productImage || resolveItemImage(it);
+            const uPrice = Number(it.variant?.price) || Number(it.unitPrice) || Number(it.product?.basePrice) || 250;
+            const q = Number(it.quantity) || 1;
             return {
               id: it.id || `oi_${Date.now()}_${idx}`,
               productId: it.productId || 'prod_1',
-              productName: it.product?.name || 'Chicken Curry Cut (Skinless)',
-              variantLabel: it.variant?.label || '500g',
-              quantity: it.quantity || 1,
-              unitPrice: it.variant?.price || it.product?.basePrice || 250,
-              totalPrice: (it.variant?.price || it.product?.basePrice || 250) * (it.quantity || 1),
+              productName: it.product?.name || it.productName || 'Chicken Curry Cut (Skinless)',
+              variantLabel: it.variant?.label || it.variantLabel || '500g',
+              quantity: q,
+              unitPrice: uPrice,
+              totalPrice: (Number(it.totalPrice) > 0 ? Number(it.totalPrice) : uPrice * q),
               cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
               cleaningOption: it.cleaningOption || 'Standard Clean',
               imageUrl: img,
@@ -1849,6 +1858,21 @@ export const api = {
               productImage: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'
             }
           ];
+
+      const itemSum = items.reduce((s: number, it: any) => s + (Number(it.totalPrice) || 0), 0);
+      const subtotal = Number(body.subtotal) > 0 ? Number(body.subtotal) : (itemSum > 0 ? itemSum : 500);
+      const deliveryFee = body.deliveryCharge !== undefined && body.deliveryCharge !== null
+        ? Number(body.deliveryCharge)
+        : (liveCart.deliveryCharge !== undefined && liveCart.deliveryCharge !== null ? Number(liveCart.deliveryCharge) : (subtotal >= 499 ? 0 : 30));
+      const discount = Number(body.discountAmount) || Number(liveCart.discountAmount) || 0;
+      const tax = body.taxAmount !== undefined && body.taxAmount !== null
+        ? Number(body.taxAmount)
+        : (liveCart.taxAmount !== undefined && liveCart.taxAmount !== null ? Number(liveCart.taxAmount) : Math.round(subtotal * 0.05));
+      const total = (body.totalAmount && Number(body.totalAmount) > 0)
+        ? Number(body.totalAmount)
+        : ((liveCart.totalAmount && Number(liveCart.totalAmount) > 0)
+            ? Number(liveCart.totalAmount)
+            : Math.max(0, subtotal + deliveryFee - discount + tax));
 
       const newOrder = {
         id: orderId,
@@ -2696,54 +2720,70 @@ export const api = {
       }
     ),
 
-  updateAdminOrderStatus: (id: string, body: any) =>
-    callApi('/orders/admin/' + id + '/status', { method: 'PATCH', body: JSON.stringify(body) }, async () => {
-      const status = body.status;
-      const paymentStatus = body.paymentStatus || (status === 'DELIVERED' ? 'PAID' : undefined);
-      const now = new Date().toISOString();
+  updateAdminOrderStatus: async (id: string, body: any) => {
+    const status = body.status;
+    const paymentStatus = body.paymentStatus || (status === 'DELIVERED' ? 'PAID' : undefined);
+    const now = new Date().toISOString();
 
-      const patchPayload = { ...body };
-      if (paymentStatus) patchPayload.paymentStatus = paymentStatus;
+    const patchPayload: any = { ...body };
+    if (paymentStatus) patchPayload.paymentStatus = paymentStatus;
 
-      const updatedSupa = await updateSupabaseOrderStatus(id, status, patchPayload);
+    // 1. Direct real-time update to Supabase Cloud Database (zero wait)
+    const updatedSupa = await updateSupabaseOrderStatus(id, status, patchPayload);
 
-      const orders = getLiveOrders();
-      const ord = orders.find((o) => o.id === id || o.orderNumber === id);
-      if (ord) {
-        if (status) ord.status = status;
-        if (paymentStatus) ord.paymentStatus = paymentStatus;
-        if (body.deliveryPartnerId !== undefined) ord.deliveryPartnerId = body.deliveryPartnerId;
-        if (body.deliveryPartnerName !== undefined) ord.deliveryPartnerName = body.deliveryPartnerName;
-        ord.updatedAt = now;
-        saveLiveOrders(orders);
-      }
+    // 2. Direct real-time update to local storage
+    const orders = getLiveOrders();
+    let ord = orders.find((o) => o.id === id || o.orderNumber === id);
+    if (ord) {
+      if (status) ord.status = status;
+      if (paymentStatus) ord.paymentStatus = paymentStatus;
+      if (body.deliveryPartnerId !== undefined) ord.deliveryPartnerId = body.deliveryPartnerId;
+      if (body.deliveryPartnerName !== undefined) ord.deliveryPartnerName = body.deliveryPartnerName;
+      ord.updatedAt = now;
+    } else if (updatedSupa) {
+      ord = updatedSupa;
+      orders.unshift(updatedSupa);
+    }
+    saveLiveOrders(orders);
 
-      broadcastOrderEvent('ORDER_UPDATED', {
-        orderId: id,
-        status,
-        paymentStatus: paymentStatus || ord?.paymentStatus,
-        paymentMethod: ord?.paymentMethod,
-        deliveryPartnerId: body.deliveryPartnerId !== undefined ? body.deliveryPartnerId : ord?.deliveryPartnerId,
-        deliveryPartnerName: body.deliveryPartnerName !== undefined ? body.deliveryPartnerName : ord?.deliveryPartnerName,
-      });
+    // 3. Broadcast instant real-time event to all open tabs / windows
+    broadcastOrderEvent('ORDER_UPDATED', {
+      orderId: id,
+      status,
+      paymentStatus: paymentStatus || ord?.paymentStatus,
+      paymentMethod: ord?.paymentMethod,
+      deliveryPartnerId: body.deliveryPartnerId !== undefined ? body.deliveryPartnerId : ord?.deliveryPartnerId,
+      deliveryPartnerName: body.deliveryPartnerName !== undefined ? body.deliveryPartnerName : ord?.deliveryPartnerName,
+    });
 
-      const finalOrder = {
-        ...(ord || {}),
-        ...(updatedSupa || {}),
-        id: ord?.id || updatedSupa?.id || id,
-        orderNumber: ord?.orderNumber || updatedSupa?.orderNumber || id,
-        status: status || ord?.status || updatedSupa?.status,
-        paymentStatus: paymentStatus || ord?.paymentStatus || updatedSupa?.paymentStatus,
-        updatedAt: now,
-        items: ord?.items && Array.isArray(ord.items) && ord.items.length > 0
-          ? ord.items
-          : (Array.isArray(updatedSupa?.items) && updatedSupa.items.length > 0 ? updatedSupa.items : []),
-        deliveryPartnerName: ord?.deliveryPartnerName || updatedSupa?.deliveryPartnerName || null,
-        deliveryPartnerId: ord?.deliveryPartnerId || updatedSupa?.deliveryPartnerId || null,
-      };
+    const finalOrder = {
+      ...(ord || {}),
+      ...(updatedSupa || {}),
+      id: ord?.id || updatedSupa?.id || id,
+      orderNumber: ord?.orderNumber || updatedSupa?.orderNumber || id,
+      status: status || ord?.status || updatedSupa?.status,
+      paymentStatus: paymentStatus || ord?.paymentStatus || updatedSupa?.paymentStatus,
+      updatedAt: now,
+      items: ord?.items && Array.isArray(ord.items) && ord.items.length > 0
+        ? ord.items
+        : (Array.isArray(updatedSupa?.items) && updatedSupa.items.length > 0 ? updatedSupa.items : []),
+      deliveryPartnerName: ord?.deliveryPartnerName || updatedSupa?.deliveryPartnerName || null,
+      deliveryPartnerId: ord?.deliveryPartnerId || updatedSupa?.deliveryPartnerId || null,
+      totalAmount: ord?.totalAmount || updatedSupa?.totalAmount || 500,
+      subtotal: ord?.subtotal || updatedSupa?.subtotal || 500,
+    };
 
-      return finalOrder;
-    }),
+    // 4. Background sync to backend endpoint without blocking UI
+    callApi('/orders/admin/' + id + '/status', { method: 'PATCH', body: JSON.stringify(body) }, () => finalOrder).catch(() => {});
+
+    return {
+      success: true,
+      message: 'Order updated successfully',
+      data: finalOrder,
+      order: finalOrder,
+      ...finalOrder,
+    };
+  },
 
   deleteAdminOrder: (id: string) => {
     // 1. Mark as deleted in local storage

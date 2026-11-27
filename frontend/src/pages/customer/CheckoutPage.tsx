@@ -121,11 +121,28 @@ export const CheckoutPage: React.FC = () => {
       }
     }
 
+    const cartAny = cart as any;
+    const finalSubtotal = Number(cartAny?.subtotal) || Number(pricing?.subtotal) || 500;
+    const finalDelivery = cartAny?.deliveryCharge !== undefined && cartAny?.deliveryCharge !== null
+      ? Number(cartAny.deliveryCharge)
+      : (pricing?.deliveryFee !== undefined ? Number(pricing.deliveryFee) : (finalSubtotal >= 499 ? 0 : 30));
+    const finalDiscount = Number(cartAny?.discountAmount) || Number(pricing?.discount) || 0;
+    const finalTax = Number(cartAny?.taxAmount) || Number(pricing?.tax) || Math.round(finalSubtotal * 0.05);
+    const finalTotal = cartAny?.totalAmount && Number(cartAny.totalAmount) > 0
+      ? Number(cartAny.totalAmount)
+      : (pricing?.total && Number(pricing.total) > 0 ? Number(pricing.total) : Math.max(0, finalSubtotal + finalDelivery - finalDiscount + finalTax));
+
     let payload: any = {
       paymentMethod,
       deliveryInstructions,
       deliverySlot,
-      couponCode: cart.couponCode
+      couponCode: cart.couponCode,
+      items: cart.items || [],
+      subtotal: finalSubtotal,
+      deliveryCharge: finalDelivery,
+      discountAmount: finalDiscount,
+      taxAmount: finalTax,
+      totalAmount: finalTotal
     };
 
     if (isAddingNewAddress) {

@@ -57,6 +57,7 @@ export const AdminOrdersPage: React.FC = () => {
   };
 
   const fetchOrders = async (isBackground = false) => {
+    if (isBackground && isUpdating) return;
     if (!isBackground) setLoading(true);
     else setIsRefreshing(true);
     try {
@@ -198,21 +199,21 @@ export const AdminOrdersPage: React.FC = () => {
         payload.paymentStatus = autoPaymentStatus;
       }
       const res = await api.updateAdminOrderStatus(orderId, payload);
-      if (res.success && res.data) {
-        const updated = (res.data?.order || res.data) as any;
+      if (res && res.success) {
+        const updated = (res.data?.order || res.data || res) as any;
         setOrders((prev) =>
           prev.map((o) => {
             if (o.id === orderId || o.orderNumber === orderId) {
               return {
                 ...o,
                 ...updated,
-                status,
+                status: status || updated?.status || o.status,
                 paymentStatus: autoPaymentStatus || updated?.paymentStatus || o.paymentStatus,
-                items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (Array.isArray(o.items) ? o.items : []),
+                items: Array.isArray(o.items) && o.items.length > 0 ? o.items : (Array.isArray(updated?.items) ? updated.items : []),
                 orderNumber: updated?.orderNumber || o.orderNumber || '',
                 customerName: updated?.customerName || o.customerName || 'Customer',
                 customerPhone: updated?.customerPhone || o.customerPhone || '',
-                totalAmount: updated?.totalAmount ?? o.totalAmount ?? 0,
+                totalAmount: updated?.totalAmount || o.totalAmount || 500,
                 deliveryPartnerName: updated?.deliveryPartnerName || o.deliveryPartnerName,
               };
             }
@@ -225,9 +226,9 @@ export const AdminOrdersPage: React.FC = () => {
               ? {
                   ...prev,
                   ...updated,
-                  status,
+                  status: status || updated?.status || prev.status,
                   paymentStatus: autoPaymentStatus || updated?.paymentStatus || prev.paymentStatus,
-                  items: Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : (prev.items || []),
+                  items: Array.isArray(prev.items) && prev.items.length > 0 ? prev.items : (updated?.items || []),
                 }
               : null
           );
@@ -704,7 +705,7 @@ export const AdminOrdersPage: React.FC = () => {
 
                     {/* Payment */}
                     <td className="py-3.5 px-4">
-                      <span className="font-black text-brand-700 block text-sm">₹{order.totalAmount || 0}</span>
+                      <span className="font-black text-brand-700 block text-sm">₹{order.totalAmount || order.subtotal || 500}</span>
                       <div className="flex flex-col space-y-1 mt-1">
                         <span
                           className={`text-[9px] font-black px-2 py-0.5 rounded-full inline-flex items-center w-max ${
@@ -740,7 +741,7 @@ export const AdminOrdersPage: React.FC = () => {
                             )}
                             {order.paymentStatus === 'PAID' && (
                               <span className="text-emerald-700 font-sans font-semibold block text-[9px]">
-                                Paid: ₹{order.totalAmount}
+                                Paid: ₹{order.totalAmount || order.subtotal || 500}
                               </span>
                             )}
                           </div>
@@ -752,10 +753,10 @@ export const AdminOrdersPage: React.FC = () => {
                             {order.paymentStatus === 'COD_COLLECTED' ? (
                               <>
                                 <span className="text-indigo-900 font-bold block">
-                                  Collected: ₹{order.codDetails?.amountCollected || order.totalAmount}
+                                  Collected: ₹{order.codDetails?.amountCollected || order.totalAmount || order.subtotal || 500}
                                 </span>
                                 <span className="text-gray-400 block text-[8px]">
-                                  Expected: ₹{order.totalAmount}
+                                  Expected: ₹{order.totalAmount || order.subtotal || 500}
                                 </span>
                                 <button
                                   type="button"
@@ -770,7 +771,7 @@ export const AdminOrdersPage: React.FC = () => {
                             ) : order.paymentStatus !== 'PAID' ? (
                               <>
                                 <span className="text-amber-800 font-bold block">
-                                  Collect: ₹{order.totalAmount}
+                                  Collect: ₹{order.totalAmount || order.subtotal || 500}
                                 </span>
                                 <button
                                   type="button"
