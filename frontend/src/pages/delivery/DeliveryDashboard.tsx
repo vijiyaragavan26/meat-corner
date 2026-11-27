@@ -19,11 +19,13 @@ import {
   MapPin,
   Banknote,
   Smartphone,
-  Mail
+  Mail,
+  Map as MapIcon
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Order, DeliveryPartner } from '../../types';
+import { LeafletMap } from '../../components/common/LeafletMap';
 
 export const DeliveryDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +37,11 @@ export const DeliveryDashboard: React.FC = () => {
   const [earningsData, setEarningsData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'deliveries' | 'earnings' | 'profile'>('deliveries');
   const [loading, setLoading] = useState(true);
+
+  // Live Location & Map State
+  const [viewMapOrderId, setViewMapOrderId] = useState<string | null>(null);
+  const [liveGpsCoords, setLiveGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isGpsActive, setIsGpsActive] = useState<boolean>(false);
 
   // OTP Verification state
   const [verifyingOrderId, setVerifyingOrderId] = useState<string | null>(null);
@@ -111,20 +118,40 @@ export const DeliveryDashboard: React.FC = () => {
       };
     } catch {}
 
-    // Simulate real-time GPS coordinate transmission every 10s if online
+    // Real-time GPS Location Tracking (Delivery Partner to Customer)
+    let watchId: number | null = null;
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setLiveGpsCoords({ lat: latitude, lng: longitude });
+            setIsGpsActive(true);
+            api.updateDeliveryGps({ lat: latitude, lng: longitude }).catch(() => {});
+          },
+          (err) => {
+            console.warn('GPS location tracking error:', err.message);
+          },
+          { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+        );
+      } catch {}
+    }
+
+    // Interval GPS sync fallback every 8s
     const gpsInterval = setInterval(() => {
-      if (partner?.isOnline) {
-        const deltaLat = (Math.random() - 0.5) * 0.002;
-        const deltaLng = (Math.random() - 0.5) * 0.002;
-        const newLat = (partner.currentLat || 11.3832) + deltaLat;
-        const newLng = (partner.currentLng || 77.5968) + deltaLng;
-        api.updateDeliveryGps({ lat: newLat, lng: newLng }).catch(() => {});
-      }
-    }, 10000);
+      const baseLat = liveGpsCoords?.lat || partner?.currentLat || 11.3832;
+      const baseLng = liveGpsCoords?.lng || partner?.currentLng || 77.5968;
+      const jitterLat = baseLat + (Math.random() - 0.5) * 0.0004;
+      const jitterLng = baseLng + (Math.random() - 0.5) * 0.0004;
+      api.updateDeliveryGps({ lat: jitterLat, lng: jitterLng }).catch(() => {});
+    }, 8000);
 
     return () => {
       clearInterval(pollInterval);
       clearInterval(gpsInterval);
+      if (watchId !== null && typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
       if (channel) channel.close();
       window.removeEventListener('meat_corner_order_event', onSync);
       window.removeEventListener('meat_corner_order_placed', onSync);
@@ -475,95 +502,199 @@ export const DeliveryDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Customer Drop Info */}
-                    <div className="bg-emerald-50/60 p-3 rounded-2xl flex items-start space-x-3 text-xs">
-                      <MapPin className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <span className="text-[10px] uppercase font-bold text-emerald-800 block">Customer Drop</span>
-                        <h4 className="font-bold text-charcoal">{order.deliveryAddressSnapshot.recipientName}</h4>
-                        <p className="text-gray-600 text-[11px] leading-relaxed">
-                          {order.deliveryAddressSnapshot.line1}, {order.deliveryAddressSnapshot.area}
-                        </p>
-                        <p className="text-[11px] font-bold text-charcoal mt-1">
-                          📞 {order.deliveryAddressSnapshot.phone}
-                        </p>
+                    {/* Customer Drop Info with Live Map Toggle */}
+                    <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100 space-y-3 text-xs">
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <span className="text-[10px] uppercase font-bold text-emerald-800 block">Customer Delivery Destination</span>
+                          <h4 className="font-bold text-charcoal">{order.deliveryAddressSnapshot.recipientName}</h4>
+                          <p className="text-gray-600 text-[11px] leading-relaxed">
+                            {order.deliveryAddressSnapshot.line1}, {order.deliveryAddressSnapshot.area}, {order.deliveryAddressSnapshot.city} - {order.deliveryAddressSnapshot.pincode}
+                          </p>
+                          <p className="text-[11px] font-bold text-charcoal mt-1">
+                            📞 {order.deliveryAddressSnapshot.phone}
+                          </p>
+                        </div>
                       </div>
+
+                      <div className="flex items-center space-x-2 pt-1 border-t border-emerald-100/80">
+                        <button
+                          type="button"
+                          onClick={() => setViewMapOrderId(viewMapOrderId === order.id ? null : order.id)}
+                          className="flex-1 bg-white hover:bg-emerald-50 text-emerald-800 font-bold text-xs py-2 px-3 rounded-xl border border-emerald-300 flex items-center justify-center space-x-1.5 transition shadow-xs"
+                        >
+                          <MapIcon className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>{viewMapOrderId === order.id ? 'Hide Destination Map' : 'View Customer Location on Map'}</span>
+                        </button>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                            `${order.deliveryAddressSnapshot.line1}, ${order.deliveryAddressSnapshot.area}, ${order.deliveryAddressSnapshot.city}`
+                          )}&travelmode=driving`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs py-2 px-3 rounded-xl flex items-center space-x-1 transition shadow-xs"
+                        >
+                          <Navigation className="w-3.5 h-3.5" />
+                          <span>GPS Route</span>
+                        </a>
+                      </div>
+
+                      {/* Embedded Interactive Map for Customer Delivery Location */}
+                      {viewMapOrderId === order.id && (
+                        <div className="pt-2">
+                          <LeafletMap
+                            storeLat={order.storeLocation?.lat || 11.3806}
+                            storeLng={order.storeLocation?.lng || 77.5944}
+                            storeName={order.storeLocation?.name || 'MEAT CORNER Store'}
+                            customerLat={order.deliveryAddressSnapshot?.lat || 11.3854}
+                            customerLng={order.deliveryAddressSnapshot?.lng || 77.5992}
+                            customerAddress={`${order.deliveryAddressSnapshot?.line1}, ${order.deliveryAddressSnapshot?.area}`}
+                            riderLat={liveGpsCoords?.lat || partner?.currentLat || 11.3832}
+                            riderLng={liveGpsCoords?.lng || partner?.currentLng || 77.5968}
+                            riderName={partner?.fullName || 'My Location'}
+                            orderStatus={order.status}
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Items to Deliver with Quantities and Prices */}
-                    <div className="text-xs space-y-1.5 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
-                      <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-wider pb-1 border-b border-gray-200">
-                        <span>Ordered Cuts</span>
-                        <span>Qty × Price</span>
+                    {/* Ordered Items with Actual Product Images, Quantities & Individual Prices */}
+                    <div className="text-xs space-y-2 bg-gray-50/70 p-3.5 rounded-2xl border border-gray-100">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-wider pb-1.5 border-b border-gray-200">
+                        <span>Ordered Fresh Chicken Cuts ({order.items?.length || 0})</span>
+                        <span>Item Total</span>
                       </div>
                       {order.items.map((it) => (
-                        <div key={it.id} className="flex justify-between items-center text-gray-700 text-xs">
-                          <div>
-                            <span className="font-semibold text-charcoal">{it.quantity}x {it.productName}</span>
-                            <span className="text-[11px] text-gray-500 block">Pack: {it.variantLabel} • Cut: {it.cuttingOption}</span>
+                        <div key={it.id} className="flex items-center justify-between text-gray-700 text-xs gap-2">
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <img
+                              src={it.imageUrl || it.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
+                              alt={it.productName}
+                              className="w-11 h-11 rounded-xl object-cover border border-gray-200 shadow-2xs flex-shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80';
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <span className="font-bold text-charcoal block truncate">{it.quantity}x {it.productName}</span>
+                              <span className="text-[10px] text-gray-500 block">
+                                Pack: {it.variantLabel} • Cut: {it.cuttingOption}
+                              </span>
+                              <span className="text-[10px] text-gray-400 block font-mono">
+                                ₹{it.unitPrice || Math.round(it.totalPrice / (it.quantity || 1))} / pack
+                              </span>
+                            </div>
                           </div>
-                          <span className="font-bold text-charcoal font-mono">₹{it.totalPrice || (it.unitPrice ? it.unitPrice * it.quantity : 0)}</span>
+                          <span className="font-bold text-charcoal font-mono flex-shrink-0">
+                            ₹{it.totalPrice || (it.unitPrice ? it.unitPrice * it.quantity : 0)}
+                          </span>
                         </div>
                       ))}
-                      <div className="flex justify-between items-center pt-1.5 border-t border-gray-200 text-xs font-black text-charcoal">
-                        <span>Total Order Amount:</span>
-                        <span className="text-sm font-black text-brand-700">₹{order.totalAmount}</span>
+                      <div className="pt-2 border-t border-gray-200 space-y-1 text-xs">
+                        <div className="flex justify-between text-gray-500 text-[11px]">
+                          <span>Subtotal:</span>
+                          <span className="font-mono">₹{order.subtotal || order.totalAmount}</span>
+                        </div>
+                        {order.deliveryCharge > 0 && (
+                          <div className="flex justify-between text-gray-500 text-[11px]">
+                            <span>Delivery Fee:</span>
+                            <span className="font-mono">₹{order.deliveryCharge}</span>
+                          </div>
+                        )}
+                        {order.discountAmount > 0 && (
+                          <div className="flex justify-between text-emerald-700 text-[11px]">
+                            <span>Discount:</span>
+                            <span className="font-mono">-₹{order.discountAmount}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1 border-t border-gray-200 font-black text-charcoal text-xs">
+                          <span>Final Order Total:</span>
+                          <span className="text-sm font-black text-brand-700 font-mono">₹{order.totalAmount}</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Payment Status & Instructions Card */}
                     {(!isCod || order.paymentStatus === 'PAID') && (
-                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-1.5 font-bold">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <span className="uppercase text-[11px] tracking-wide text-emerald-800">ONLINE PAYMENT – ALREADY PAID</span>
+                            <span className="uppercase text-[11px] tracking-wide text-emerald-800">
+                              PAYMENT METHOD: ONLINE • {order.paymentStatus === 'PAID' ? 'PAID' : order.paymentStatus}
+                            </span>
                           </div>
-                          <span className="text-sm font-black text-emerald-800">₹{order.totalAmount}</span>
+                          <span className="text-sm font-black text-emerald-800 font-mono">₹{order.totalAmount}</span>
                         </div>
-                        <p className="text-[11px] text-emerald-700">✓ Pre-paid verified online order. Do not collect any money from customer.</p>
+                        <p className="text-[11px] text-emerald-700 font-medium">
+                          ✓ Exact amount ₹{order.totalAmount} already paid online via verified gateway. DO NOT collect money from customer.
+                        </p>
+                        {(order.paymentDetails?.transactionId || (order as any).razorpayPaymentId) && (
+                          <div className="text-[10px] text-emerald-800/80 pt-1 border-t border-emerald-200/60 font-mono flex justify-between">
+                            <span>Txn ID: {order.paymentDetails?.transactionId || (order as any).razorpayPaymentId}</span>
+                            <span>{new Date(order.paymentDetails?.paidAt || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {isCod && order.paymentStatus === 'COD_COLLECTED' && (
-                      <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+                      <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-1.5 font-bold">
                             <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-                            <span className="uppercase text-[11px] tracking-wide text-indigo-900">COD CASH COLLECTED: ₹{order.codDetails?.amountCollected || order.totalAmount}</span>
+                            <span className="uppercase text-[11px] tracking-wide text-indigo-900">
+                              PAYMENT METHOD: CASH ON DELIVERY
+                            </span>
                           </div>
-                          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded-full font-black">COLLECTED</span>
+                          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded-full font-black">
+                            STATUS: COLLECTED
+                          </span>
                         </div>
-                        <p className="text-[11px] text-indigo-700">Cash received from customer. Awaiting store manager verification & settlement.</p>
+                        <div className="flex justify-between items-center text-xs font-bold text-indigo-950 pt-1 border-t border-indigo-200/60">
+                          <span>Cash Collected from Customer:</span>
+                          <span className="text-sm font-black text-indigo-900 font-mono">₹{order.codDetails?.amountCollected || order.totalAmount}</span>
+                        </div>
+                        <p className="text-[10px] text-indigo-700">
+                          Collected on {new Date(order.codDetails?.collectedAt || order.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Keep cash safely for store settlement.
+                        </p>
                       </div>
                     )}
 
                     {isCod && order.paymentStatus !== 'PAID' && order.paymentStatus !== 'COD_COLLECTED' && (
-                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-2">
+                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-1.5 font-bold">
                             <Banknote className="w-4 h-4 text-amber-600" />
-                            <span className="uppercase text-[11px] tracking-wide text-amber-900">COD – PAYMENT PENDING</span>
+                            <span className="uppercase text-[11px] tracking-wide text-amber-900">
+                              PAYMENT METHOD: CASH ON DELIVERY • STATUS: PENDING
+                            </span>
                           </div>
-                          <span className="text-sm font-black text-brand-700">Collect ₹{order.totalAmount}</span>
+                          <span className="text-sm font-black text-brand-700 font-mono">Collect ₹{order.totalAmount}</span>
                         </div>
-                        <p className="text-[11px] text-amber-700">Please collect exact cash from customer before handing over the parcel.</p>
-                        <div className="flex items-center space-x-2 pt-1">
-                          <input
-                            type="number"
-                            value={codInputs[order.id] !== undefined ? codInputs[order.id] : String(order.totalAmount)}
-                            onChange={(e) => setCodInputs({ ...codInputs, [order.id]: e.target.value })}
-                            className="w-28 bg-white border border-amber-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-charcoal outline-none focus:border-amber-600 font-mono"
-                            placeholder="Cash collected"
-                          />
-                          <button
-                            type="button"
-                            disabled={submittingCod === order.id}
-                            onClick={() => handleCollectCod(order.id, order.totalAmount)}
-                            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-1.5 px-3 rounded-xl shadow-sm transition disabled:opacity-50"
-                          >
-                            {submittingCod === order.id ? 'Recording...' : 'Submit Cash Collection'}
-                          </button>
+                        <div className="p-2 bg-amber-100/60 rounded-xl text-[11px] text-amber-900">
+                          <strong>Amount to Collect: ₹{order.totalAmount}</strong> in cash before handing over the parcel.
+                        </div>
+                        <div className="space-y-1.5 pt-1">
+                          <label className="text-[10px] font-bold uppercase text-amber-800 block">Enter Cash Amount Collected from Customer (₹):</label>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="number"
+                              value={codInputs[order.id] !== undefined ? codInputs[order.id] : String(order.totalAmount)}
+                              onChange={(e) => setCodInputs({ ...codInputs, [order.id]: e.target.value })}
+                              className="w-32 bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold text-charcoal outline-none focus:border-amber-600 font-mono"
+                              placeholder="Amount (₹)"
+                            />
+                            <button
+                              type="button"
+                              disabled={submittingCod === order.id}
+                              onClick={() => handleCollectCod(order.id, order.totalAmount)}
+                              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2 px-3.5 rounded-xl shadow-sm transition disabled:opacity-50"
+                            >
+                              {submittingCod === order.id ? 'Saving Collection...' : 'Submit Cash Collection'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}

@@ -381,31 +381,53 @@ function broadcastOrderEvent(type: string, detail: any) {
   }
 }
 
+function resolveItemImage(it: any): string {
+  if (it.imageUrl) return it.imageUrl;
+  if (it.productImage) return it.productImage;
+  if (it.product?.images?.[0]) return it.product.images[0];
+  const pName = (it.productName || '').toLowerCase();
+  const found = DEMO_PRODUCTS.find(
+    (p) => p.id === it.productId || (pName && (p.name.toLowerCase().includes(pName) || pName.includes(p.name.toLowerCase())))
+  );
+  return found?.images?.[0] || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80';
+}
+
 function normalizeSupabaseOrder(o: any) {
-  const items = Array.isArray(o.OrderItems) && o.OrderItems.length > 0
-    ? o.OrderItems.map((it: any) => ({
-        id: it.id,
-        productId: it.productId,
-        productName: it.productName || 'Chicken Cut',
-        variantLabel: it.variantLabel || '500g',
-        quantity: Number(it.quantity) || 1,
-        unitPrice: Number(it.unitPrice) || 0,
-        totalPrice: Number(it.totalPrice) || 0,
-        cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
-        cleaningOption: it.cleaningOption || 'Standard Clean'
-      }))
-    : (Array.isArray(o.items) && o.items.length > 0
-        ? o.items
-        : [
-            {
-              id: 'oi_' + o.id,
-              productName: 'Fresh Chicken Order',
-              variantLabel: 'Standard Pack',
-              quantity: 1,
-              unitPrice: Number(o.totalAmount) || 0,
-              totalPrice: Number(o.totalAmount) || 0,
-            }
-          ]);
+  const rawItems = Array.isArray(o.OrderItems) && o.OrderItems.length > 0
+    ? o.OrderItems
+    : (Array.isArray(o.items) && o.items.length > 0 ? o.items : []);
+
+  const items = rawItems.length > 0
+    ? rawItems.map((it: any) => {
+        const img = resolveItemImage(it);
+        return {
+          id: it.id,
+          productId: it.productId,
+          productName: it.productName || 'Chicken Cut',
+          variantLabel: it.variantLabel || '500g',
+          quantity: Number(it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          totalPrice: Number(it.totalPrice) || 0,
+          cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
+          cleaningOption: it.cleaningOption || 'Standard Clean',
+          imageUrl: img,
+          productImage: img
+        };
+      })
+    : [
+        {
+          id: 'oi_' + o.id,
+          productName: 'Fresh Chicken Order',
+          variantLabel: 'Standard Pack',
+          quantity: 1,
+          unitPrice: Number(o.totalAmount) || 0,
+          totalPrice: Number(o.totalAmount) || 0,
+          cuttingOption: 'Curry Cut (Medium)',
+          cleaningOption: 'Standard Clean',
+          imageUrl: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80',
+          productImage: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'
+        }
+      ];
 
   const partner = o.DeliveryPartners || (o.deliveryPartnerId ? DEMO_DELIVERY_PARTNERS.find(p => p.id === o.deliveryPartnerId) : null);
 
@@ -1796,17 +1818,22 @@ export const api = {
       const total = liveCart.totalAmount ?? (subtotal + deliveryFee - discount + tax);
 
       const items = liveCart.items.length > 0
-        ? liveCart.items.map((it: any, idx: number) => ({
-            id: it.id || `oi_${Date.now()}_${idx}`,
-            productId: it.productId || 'prod_1',
-            productName: it.product?.name || 'Chicken Curry Cut (Skinless)',
-            variantLabel: it.variant?.label || '500g',
-            quantity: it.quantity || 1,
-            unitPrice: it.variant?.price || it.product?.basePrice || 250,
-            totalPrice: (it.variant?.price || it.product?.basePrice || 250) * (it.quantity || 1),
-            cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
-            cleaningOption: it.cleaningOption || 'Standard Clean'
-          }))
+        ? liveCart.items.map((it: any, idx: number) => {
+            const img = it.product?.images?.[0] || it.imageUrl || it.productImage || resolveItemImage(it);
+            return {
+              id: it.id || `oi_${Date.now()}_${idx}`,
+              productId: it.productId || 'prod_1',
+              productName: it.product?.name || 'Chicken Curry Cut (Skinless)',
+              variantLabel: it.variant?.label || '500g',
+              quantity: it.quantity || 1,
+              unitPrice: it.variant?.price || it.product?.basePrice || 250,
+              totalPrice: (it.variant?.price || it.product?.basePrice || 250) * (it.quantity || 1),
+              cuttingOption: it.cuttingOption || 'Curry Cut (Medium)',
+              cleaningOption: it.cleaningOption || 'Standard Clean',
+              imageUrl: img,
+              productImage: img
+            };
+          })
         : [
             {
               id: 'oi_' + Date.now(),
@@ -1817,7 +1844,9 @@ export const api = {
               unitPrice: 250,
               totalPrice: 500,
               cuttingOption: 'Curry Cut (Medium)',
-              cleaningOption: 'Standard Clean'
+              cleaningOption: 'Standard Clean',
+              imageUrl: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80',
+              productImage: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'
             }
           ];
 
@@ -2502,7 +2531,31 @@ export const api = {
     ),
 
   updateDeliveryGps: (body: { lat: number; lng: number; orderId?: string }) =>
-    callApi('/delivery/location', { method: 'POST', body: JSON.stringify(body) }, () => ({ success: true })),
+    callApi('/delivery/location', { method: 'POST', body: JSON.stringify(body) }, () => {
+      const orders = getLiveOrders();
+      let updated = false;
+      orders.forEach((o) => {
+        if (
+          o.status === 'OUT_FOR_DELIVERY' ||
+          o.status === 'PICKED_UP' ||
+          o.status === 'PARTNER_ASSIGNED' ||
+          (body.orderId && (o.id === body.orderId || o.orderNumber === body.orderId))
+        ) {
+          o.partnerLocation = { lat: body.lat, lng: body.lng };
+          updated = true;
+        }
+      });
+      if (updated) {
+        saveLiveOrders(orders);
+        broadcastOrderEvent('RIDER_LOCATION_UPDATED', {
+          lat: body.lat,
+          lng: body.lng,
+          orderId: body.orderId,
+          timestamp: Date.now()
+        });
+      }
+      return { success: true, lat: body.lat, lng: body.lng };
+    }),
 
   getDeliveryEarnings: () =>
     callApi('/delivery/earnings', {}, async () => {

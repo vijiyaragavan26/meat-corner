@@ -123,6 +123,8 @@ export interface OrderItem {
   totalPrice: number;
   cuttingOption?: string;
   cleaningOption?: string;
+  imageUrl?: string;
+  productImage?: string;
 }
 
 export type OrderStatus =

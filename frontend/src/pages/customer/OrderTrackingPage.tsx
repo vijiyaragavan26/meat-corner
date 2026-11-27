@@ -49,18 +49,34 @@ export const OrderTrackingPage: React.FC = () => {
 
   useEffect(() => {
     fetchOrder();
-    // Auto polling every 4 seconds for live tracking updates
-    const interval = setInterval(fetchOrder, 4000);
 
-    const onSync = () => {
-      fetchOrder();
+    // Auto polling for live tracking updates while not delivered
+    const interval = setInterval(() => {
+      if (order?.status !== 'DELIVERED') {
+        fetchOrder();
+      }
+    }, 4000);
+
+    const onSync = (e: any) => {
+      if (e?.detail?.type === 'RIDER_LOCATION_UPDATED' && e.detail.lat && e.detail.lng) {
+        setOrder((prev: any) => (prev ? { ...prev, partnerLocation: { lat: e.detail.lat, lng: e.detail.lng } } : null));
+      } else {
+        fetchOrder();
+      }
     };
+
     window.addEventListener('meat_corner_order_event', onSync);
+    window.addEventListener('meat_corner_orders_changed', onSync);
+
     let channel: BroadcastChannel | null = null;
     try {
       channel = new BroadcastChannel('meat_corner_orders_sync');
-      channel.onmessage = () => {
-        fetchOrder();
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'RIDER_LOCATION_UPDATED' && event.data.lat && event.data.lng) {
+          setOrder((prev: any) => (prev ? { ...prev, partnerLocation: { lat: event.data.lat, lng: event.data.lng } } : null));
+        } else {
+          fetchOrder();
+        }
       };
     } catch {}
 
@@ -68,8 +84,9 @@ export const OrderTrackingPage: React.FC = () => {
       clearInterval(interval);
       if (channel) channel.close();
       window.removeEventListener('meat_corner_order_event', onSync);
+      window.removeEventListener('meat_corner_orders_changed', onSync);
     };
-  }, [id]);
+  }, [id, order?.status]);
 
   if (loading) {
     return (

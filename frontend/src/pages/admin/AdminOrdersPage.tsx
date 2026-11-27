@@ -671,13 +671,34 @@ export const AdminOrdersPage: React.FC = () => {
                       </span>
                     </td>
 
-                    {/* Items */}
+                    {/* Items & Cuts with Actual Ordered Product Images */}
                     <td className="py-3.5 px-4">
-                      <span className="font-bold text-charcoal">{Array.isArray(order.items) ? order.items.length : 0} items</span>
-                      <div className="text-[10px] text-gray-500 truncate max-w-[160px]">
-                        {Array.isArray(order.items) && order.items.length > 0
-                          ? order.items.map((it) => it?.productName || 'Chicken Cut').join(', ')
-                          : 'Chicken Order'}
+                      <div className="flex items-center space-x-2.5">
+                        {Array.isArray(order.items) && order.items.length > 0 && (
+                          <div className="flex -space-x-2 overflow-hidden flex-shrink-0">
+                            {order.items.slice(0, 3).map((it, iIdx) => (
+                              <img
+                                key={iIdx}
+                                src={it.imageUrl || it.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
+                                alt={it.productName}
+                                className="w-8 h-8 rounded-lg object-cover border-2 border-white shadow-xs"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80';
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-bold text-charcoal block">
+                            {Array.isArray(order.items) ? order.items.length : 0} {order.items.length === 1 ? 'Cut' : 'Cuts'}
+                          </span>
+                          <span className="text-[10px] text-gray-500 truncate max-w-[150px] block" title={order.items?.map(it => `${it.quantity}x ${it.productName}`).join(', ')}>
+                            {Array.isArray(order.items) && order.items.length > 0
+                              ? order.items.map((it) => `${it.quantity}x ${it.productName}`).join(', ')
+                              : 'Chicken Cut'}
+                          </span>
+                        </div>
                       </div>
                     </td>
 
@@ -706,42 +727,67 @@ export const AdminOrdersPage: React.FC = () => {
                             ? 'REFUND'
                             : order.paymentStatus === 'FAILED'
                             ? 'FAILED'
-                            : 'PENDING'} • {order.paymentMethod || 'COD'}
+                            : 'PENDING'} • {order.paymentMethod === 'COD' ? 'CASH ON DELIVERY' : 'ONLINE'}
                         </span>
 
-                        {/* Online Transaction ID */}
-                        {(order.paymentMethod === 'ONLINE' || order.paymentMethod === 'RAZORPAY') && (order.paymentDetails?.transactionId || (order as any).razorpayPaymentId) && (
-                          <span
-                            className="text-[9px] font-mono text-gray-500 truncate max-w-[120px]"
-                            title={order.paymentDetails?.transactionId || (order as any).razorpayPaymentId}
-                          >
-                            Txn: {(order.paymentDetails?.transactionId || (order as any).razorpayPaymentId || '').slice(-8)}
-                          </span>
+                        {/* Online Transaction Details */}
+                        {(order.paymentMethod === 'ONLINE' || order.paymentMethod === 'RAZORPAY') && (
+                          <div className="text-[9px] text-gray-500 font-mono">
+                            {(order.paymentDetails?.transactionId || (order as any).razorpayPaymentId) && (
+                              <span className="block truncate max-w-[125px]" title={order.paymentDetails?.transactionId || (order as any).razorpayPaymentId}>
+                                Txn: {(order.paymentDetails?.transactionId || (order as any).razorpayPaymentId || '').slice(-8)}
+                              </span>
+                            )}
+                            {order.paymentStatus === 'PAID' && (
+                              <span className="text-emerald-700 font-sans font-semibold block text-[9px]">
+                                Paid: ₹{order.totalAmount}
+                              </span>
+                            )}
+                          </div>
                         )}
 
-                        {/* Actions based on payment state */}
-                        {order.paymentStatus === 'COD_COLLECTED' && (
-                          <button
-                            type="button"
-                            disabled={isUpdating}
-                            onClick={() => handleSettleCodOrder(order.id || order.orderNumber)}
-                            className="text-[9px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline text-left inline-flex items-center space-x-1"
-                            title="Verify rider cash handover and mark as PAID"
-                          >
-                            <span>✓ Settle COD Handover</span>
-                          </button>
-                        )}
-
-                        {order.paymentStatus === 'PENDING' && (
-                          <button
-                            type="button"
-                            disabled={isUpdating}
-                            onClick={() => handlePaymentStatusUpdate(order.id || order.orderNumber, 'PAID')}
-                            className="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-left inline-flex items-center space-x-1"
-                            title="Mark Cash Collected / Paid"
-                          >
-                            <span>Mark Paid</span>
-                          </button>
+                        {/* COD Details: Expected vs Collected */}
+                        {order.paymentMethod === 'COD' && (
+                          <div className="text-[9px] space-y-0.5">
+                            {order.paymentStatus === 'COD_COLLECTED' ? (
+                              <>
+                                <span className="text-indigo-900 font-bold block">
+                                  Collected: ₹{order.codDetails?.amountCollected || order.totalAmount}
+                                </span>
+                                <span className="text-gray-400 block text-[8px]">
+                                  Expected: ₹{order.totalAmount}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={isUpdating}
+                                  onClick={() => handleSettleCodOrder(order.id || order.orderNumber)}
+                                  className="text-[9px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline text-left inline-flex items-center space-x-1"
+                                  title="Verify rider cash handover and mark as PAID"
+                                >
+                                  <span>✓ Settle COD Handover</span>
+                                </button>
+                              </>
+                            ) : order.paymentStatus !== 'PAID' ? (
+                              <>
+                                <span className="text-amber-800 font-bold block">
+                                  Collect: ₹{order.totalAmount}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={isUpdating}
+                                  onClick={() => handlePaymentStatusUpdate(order.id || order.orderNumber, 'PAID')}
+                                  className="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-left inline-flex items-center space-x-1"
+                                  title="Mark Cash Collected / Paid"
+                                >
+                                  <span>Mark Paid</span>
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-emerald-700 font-bold block text-[9px]">
+                                Reconciled & Paid
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -966,20 +1012,36 @@ export const AdminOrdersPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Items Breakdown */}
+            {/* Items Breakdown with Actual Images, Quantities & Prices */}
             <div>
-              <h4 className="font-bold text-xs text-charcoal uppercase tracking-wider mb-2">Ordered Chicken Cuts</h4>
+              <h4 className="font-bold text-xs text-charcoal uppercase tracking-wider mb-2">
+                Ordered Chicken Cuts ({selectedOrder.items?.length || 0})
+              </h4>
               <div className="divide-y divide-gray-100 bg-gray-50 rounded-2xl p-4">
                 {(Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? selectedOrder.items : []).map((it) => (
-                  <div key={it.id || it.productName} className="py-2 flex justify-between items-center text-xs">
-                    <div>
-                      <h5 className="font-bold text-charcoal">{it.productName}</h5>
-                      <p className="text-[11px] text-gray-500">
-                        {it.variantLabel} • Cut: {it.cuttingOption} • {it.cleaningOption}
-                      </p>
-                      <span className="text-gray-400">Qty: {it.quantity}</span>
+                  <div key={it.id || it.productName} className="py-2.5 flex items-center justify-between text-xs gap-3">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <img
+                        src={it.imageUrl || it.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
+                        alt={it.productName}
+                        className="w-12 h-12 rounded-xl object-cover border border-gray-200 shadow-2xs flex-shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80';
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <h5 className="font-bold text-charcoal truncate">{it.productName}</h5>
+                        <p className="text-[11px] text-gray-500">
+                          {it.variantLabel} • Cut: {it.cuttingOption} • {it.cleaningOption}
+                        </p>
+                        <div className="flex items-center space-x-2 text-gray-500 text-[11px] mt-0.5">
+                          <span>Qty: <strong className="text-charcoal">{it.quantity}</strong></span>
+                          <span>•</span>
+                          <span>Unit Price: <strong className="text-charcoal font-mono">₹{it.unitPrice || Math.round(it.totalPrice / (it.quantity || 1))}</strong></span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="font-extrabold text-charcoal">₹{it.totalPrice}</span>
+                    <span className="font-black text-brand-700 text-sm font-mono flex-shrink-0">₹{it.totalPrice}</span>
                   </div>
                 ))}
               </div>
@@ -992,21 +1054,28 @@ export const AdminOrdersPage: React.FC = () => {
                 <p className="font-bold text-charcoal">{selectedOrder.deliveryAddressSnapshot?.recipientName}</p>
                 <p className="text-gray-500">{selectedOrder.deliveryAddressSnapshot?.line1}, {selectedOrder.deliveryAddressSnapshot?.area}</p>
                 <p className="text-gray-500">{selectedOrder.deliveryAddressSnapshot?.city} - {selectedOrder.deliveryAddressSnapshot?.pincode}</p>
+                <p className="text-gray-600 font-mono text-[11px] font-bold">📞 {selectedOrder.deliveryAddressSnapshot?.phone}</p>
               </div>
 
               <div className="bg-gray-50 p-3 rounded-2xl space-y-1">
                 <span className="font-bold uppercase text-gray-400 block text-[10px]">Financial Summary</span>
                 <p className="flex justify-between text-gray-500">
                   <span>Subtotal:</span>
-                  <span>₹{selectedOrder.subtotal}</span>
+                  <span className="font-mono">₹{selectedOrder.subtotal}</span>
                 </p>
                 <p className="flex justify-between text-gray-500">
                   <span>Delivery Fee:</span>
-                  <span>₹{selectedOrder.deliveryCharge}</span>
+                  <span className="font-mono">₹{selectedOrder.deliveryCharge}</span>
                 </p>
+                {selectedOrder.discountAmount > 0 && (
+                  <p className="flex justify-between text-emerald-700 font-semibold">
+                    <span>Discount:</span>
+                    <span className="font-mono">-₹{selectedOrder.discountAmount}</span>
+                  </p>
+                )}
                 <p className="flex justify-between font-black text-brand-700 text-sm pt-1 border-t">
-                  <span>Total Amount:</span>
-                  <span>₹{selectedOrder.totalAmount}</span>
+                  <span>Final Total Amount:</span>
+                  <span className="font-mono">₹{selectedOrder.totalAmount}</span>
                 </p>
               </div>
             </div>
@@ -1018,7 +1087,9 @@ export const AdminOrdersPage: React.FC = () => {
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Payment Information</p>
                   <div className="flex items-center space-x-2 mt-0.5">
                     <CreditCard className="w-4 h-4 text-brand-700" />
-                    <span className="font-bold text-xs text-charcoal">{selectedOrder.paymentMethod || 'COD'}</span>
+                    <span className="font-bold text-xs text-charcoal">
+                      {selectedOrder.paymentMethod === 'COD' ? 'CASH ON DELIVERY' : 'ONLINE'}
+                    </span>
                     <span
                       className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                         selectedOrder.paymentStatus === 'PAID'
@@ -1074,26 +1145,60 @@ export const AdminOrdersPage: React.FC = () => {
               </div>
 
               {/* Transaction & Settlement Details */}
-              <div className="pt-2 border-t border-gray-200/70 grid grid-cols-2 gap-2 text-[11px] text-gray-600">
+              <div className="pt-2 border-t border-gray-200/70 grid grid-cols-2 gap-3 text-[11px] text-gray-600">
                 {(selectedOrder.paymentMethod === 'ONLINE' || selectedOrder.paymentMethod === 'RAZORPAY') && (
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[10px]">Gateway Transaction ID</span>
-                    <span className="font-mono font-bold text-charcoal truncate block">
-                      {selectedOrder.paymentDetails?.transactionId || (selectedOrder as any).razorpayPaymentId || 'rzp_verified_live'}
-                    </span>
-                  </div>
+                  <>
+                    <div>
+                      <span className="text-gray-400 font-bold block text-[10px]">Paid Amount</span>
+                      <span className="font-bold text-emerald-800 text-sm font-mono">₹{selectedOrder.totalAmount}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-bold block text-[10px]">Gateway Transaction ID</span>
+                      <span className="font-mono font-bold text-charcoal truncate block" title={selectedOrder.paymentDetails?.transactionId || (selectedOrder as any).razorpayPaymentId}>
+                        {selectedOrder.paymentDetails?.transactionId || (selectedOrder as any).razorpayPaymentId || 'rzp_verified_live'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-bold block text-[10px]">Payment Date & Time</span>
+                      <span className="font-medium text-gray-700">
+                        {new Date(selectedOrder.paymentDetails?.paidAt || selectedOrder.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </>
                 )}
                 {selectedOrder.paymentMethod === 'COD' && (
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[10px]">COD Collection Status</span>
-                    <span className="font-bold text-charcoal">
-                      {selectedOrder.paymentStatus === 'PAID'
-                        ? 'Settled to Store'
-                        : selectedOrder.paymentStatus === 'COD_COLLECTED'
-                        ? `Collected: ₹${selectedOrder.codDetails?.amountCollected || selectedOrder.totalAmount}`
-                        : 'Awaiting cash collection'}
-                    </span>
-                  </div>
+                  <>
+                    <div>
+                      <span className="text-gray-400 font-bold block text-[10px]">Expected COD Amount</span>
+                      <span className="font-bold text-charcoal text-sm font-mono">₹{selectedOrder.totalAmount}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-bold block text-[10px]">Actual Cash Collected</span>
+                      <span className={`font-bold text-sm font-mono ${selectedOrder.paymentStatus === 'COD_COLLECTED' || selectedOrder.paymentStatus === 'PAID' ? 'text-indigo-900' : 'text-amber-800'}`}>
+                        {selectedOrder.codDetails?.amountCollected
+                          ? `₹${selectedOrder.codDetails.amountCollected}`
+                          : selectedOrder.paymentStatus === 'PAID'
+                          ? `₹${selectedOrder.totalAmount}`
+                          : 'Pending Collection'}
+                      </span>
+                    </div>
+                    {selectedOrder.codDetails?.collectedAt && (
+                      <div>
+                        <span className="text-gray-400 font-bold block text-[10px]">Collection Timestamp</span>
+                        <span className="font-medium text-gray-700">
+                          {new Date(selectedOrder.codDetails.collectedAt).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    {selectedOrder.codDetails?.collectedByPartnerName && (
+                      <div>
+                        <span className="text-gray-400 font-bold block text-[10px]">Collected by Rider</span>
+                        <span className="font-medium text-gray-700">
+                          {selectedOrder.codDetails.collectedByPartnerName}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div>
                   <span className="text-gray-400 font-bold block text-[10px]">Delivery OTP Status</span>

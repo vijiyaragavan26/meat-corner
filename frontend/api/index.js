@@ -35321,7 +35321,9 @@ var createOrder = async (req, res) => {
         unitPrice,
         totalPrice,
         cuttingOption: item.cuttingOption || product.cuttingOptions[0],
-        cleaningOption: item.cleaningOption || product.cleaningOptions[0]
+        cleaningOption: item.cleaningOption || product.cleaningOptions[0],
+        imageUrl: product.images?.[0] || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80',
+        productImage: product.images?.[0] || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'
       });
     }
     if (subtotal < settings.minOrderAmount) {
