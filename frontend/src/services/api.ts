@@ -240,6 +240,33 @@ function saveDeletedOrderIds(set: Set<string>) {
   } catch {}
 }
 
+function syncProductVariantsWithBasePrice(p: any): any {
+  if (!p) return p;
+  const basePrice = Number(p.basePrice ?? p.price ?? 0);
+  if (basePrice <= 0) return p;
+
+  const rawVariants = Array.isArray(p.variants) && p.variants.length > 0
+    ? p.variants
+    : [
+        { id: `var_${p.id}_500g`, productId: p.id, label: '500g', weightGrams: 500, price: Math.max(1, Math.round(basePrice * 0.5)), sku: `MC-${p.id}-500G`, isActive: true },
+        { id: `var_${p.id}_1kg`, productId: p.id, label: '1kg', weightGrams: 1000, price: basePrice, sku: `MC-${p.id}-1KG`, isActive: true }
+      ];
+
+  const updatedVariants = rawVariants.map((v: any) => {
+    const weight = Number(v.weightGrams) || (v.label?.includes('1kg') ? 1000 : (v.label?.includes('250g') ? 250 : 500));
+    const calculatedPrice = weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000)));
+    return {
+      ...v,
+      price: calculatedPrice
+    };
+  });
+
+  return {
+    ...p,
+    variants: updatedVariants
+  };
+}
+
 function mergeProductsWithLocalStore(baseProducts: any[]): any[] {
   const overrides = getProductOverrides();
   const deletedIds = getDeletedProductIds();
@@ -266,7 +293,7 @@ function mergeProductsWithLocalStore(baseProducts: any[]): any[] {
     });
 
   const customIds = new Set(processedCustom.map((p) => p.id));
-  return [...processedCustom, ...processedBase.filter((p) => !customIds.has(p.id))];
+  return [...processedCustom, ...processedBase.filter((p) => !customIds.has(p.id))].map(syncProductVariantsWithBasePrice);
 }
 
 async function syncUserToSupabase(user: any, passwordHash?: string) {
@@ -377,7 +404,9 @@ function broadcastOrderEvent(type: string, detail: any) {
   if (typeof window !== 'undefined') {
     const orderPayload = detail?.order || detail;
     window.dispatchEvent(new CustomEvent('meat_corner_orders_changed', { detail: { type, ...detail } }));
-    window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: orderPayload }));
+    if (type === 'ORDER_CREATED') {
+      window.dispatchEvent(new CustomEvent('meat_corner_order_placed', { detail: orderPayload }));
+    }
   }
 }
 
@@ -1060,32 +1089,36 @@ function updateLiveCartPricing() {
   // Filter out any zero or negative quantity items
   liveCart.items = (liveCart.items || []).filter((it: any) => (it.quantity || 0) > 0);
 
+  const allProducts = mergeProductsWithLocalStore(DEMO_PRODUCTS);
+
   // Ensure each cart item has complete product and valid variant details
   liveCart.items.forEach((it: any) => {
-    if (!it.product) {
-      it.product = DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
-    }
-    const prod = it.product || DEMO_PRODUCTS.find((p) => p.id === it.productId) || DEMO_PRODUCTS[0];
-    if (!it.variant || !it.variant.price || it.variant.price <= 0) {
-      it.variant =
-        prod.variants?.find((v: any) => v.id === it.variantId) ||
-        prod.variants?.[0] || {
-          id: it.variantId || 'var_default',
-          productId: prod.id,
-          label: '500g',
-          weightGrams: 500,
-          price: prod.basePrice || 250,
-          inStock: true
-        };
-    }
+    const currentProd = allProducts.find((p) => p.id === it.productId) || it.product || DEMO_PRODUCTS[0];
+    it.product = currentProd;
+
+    const basePrice = Number(currentProd.basePrice ?? currentProd.price ?? 250);
+    const matchedVariant = currentProd.variants?.find((v: any) => v.id === it.variantId) || currentProd.variants?.[0];
+    const weight = Number(it.variant?.weightGrams || matchedVariant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
+    const calculatedPrice = weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000)));
+
+    it.variant = {
+      ...(it.variant || {}),
+      ...(matchedVariant || {}),
+      id: it.variantId || matchedVariant?.id || 'var_default',
+      productId: currentProd.id,
+      label: it.variant?.label || matchedVariant?.label || (weight === 1000 ? '1kg' : '500g'),
+      weightGrams: weight,
+      price: calculatedPrice,
+      inStock: true
+    };
   });
 
   const subtotal = liveCart.items.reduce((sum: number, it: any) => {
-    const price = (it.variant?.price && it.variant.price > 0)
-      ? it.variant.price
-      : (it.product?.basePrice && it.product.basePrice > 0)
-        ? it.product.basePrice
-        : 250;
+    const basePrice = Number(it.product?.basePrice ?? it.product?.price ?? 0);
+    const weight = Number(it.variant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
+    const price = basePrice > 0
+      ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+      : (Number(it.variant?.price) || 250);
     return sum + price * (it.quantity || 1);
   }, 0);
   const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
@@ -1716,17 +1749,25 @@ export const api = {
 
   addToCart: (body: any) =>
     callApi('/cart/items', { method: 'POST', body: JSON.stringify(body) }, () => {
-      const prod = DEMO_PRODUCTS.find((p) => p.id === body.productId) || DEMO_PRODUCTS[0];
-      const variant =
+      const allProds = mergeProductsWithLocalStore(DEMO_PRODUCTS);
+      const prod = allProds.find((p) => p.id === body.productId) || allProds[0] || DEMO_PRODUCTS[0];
+      const basePrice = Number(prod.basePrice ?? prod.price ?? 250);
+
+      const matchedVariant =
         prod.variants?.find((v: any) => v.id === body.variantId) ||
-        prod.variants?.[0] || {
-          id: body.variantId || 'var_default',
-          productId: prod.id,
-          label: '500g',
-          weightGrams: 500,
-          price: prod.basePrice || 250,
-          inStock: true,
-        };
+        prod.variants?.[0];
+      const weight = Number(matchedVariant?.weightGrams) || (matchedVariant?.label?.includes('1kg') ? 1000 : 500);
+      const calculatedPrice = weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000)));
+
+      const variant = {
+        ...(matchedVariant || {}),
+        id: body.variantId || matchedVariant?.id || 'var_default',
+        productId: prod.id,
+        label: matchedVariant?.label || (weight === 1000 ? '1kg' : '500g'),
+        weightGrams: weight,
+        price: calculatedPrice,
+        inStock: true,
+      };
 
       const cuttingOpt = body.cuttingOption || prod.cuttingOptions?.[0] || 'Curry Cut (Medium)';
       const cleaningOpt = body.cleaningOption || prod.cleaningOptions?.[0] || 'Standard Clean';
@@ -2779,6 +2820,10 @@ export const api = {
       ...(updatedSupa || {}),
       id: ord?.id || updatedSupa?.id || id,
       orderNumber: ord?.orderNumber || updatedSupa?.orderNumber || id,
+      createdAt: ord?.createdAt || updatedSupa?.createdAt || now,
+      customerName: ord?.customerName || updatedSupa?.customerName || 'Customer',
+      customerPhone: ord?.customerPhone || updatedSupa?.customerPhone || '',
+      deliveryAddressSnapshot: ord?.deliveryAddressSnapshot || updatedSupa?.deliveryAddressSnapshot || null,
       status: status || ord?.status || updatedSupa?.status,
       paymentStatus: paymentStatus || ord?.paymentStatus || updatedSupa?.paymentStatus,
       updatedAt: now,

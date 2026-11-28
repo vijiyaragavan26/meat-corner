@@ -1295,11 +1295,22 @@ class DataStore {
       this.carts.set(userId, cart);
     }
     // Populate products and variants
-    cart.items = cart.items.map((item) => ({
-      ...item,
-      product: this.getProductById(item.productId),
-      variant: this.variants.find((v) => v.id === item.variantId)
-    }));
+    cart.items = cart.items.map((item) => {
+      const prod = this.getProductById(item.productId);
+      let variant = this.variants.find((v) => v.id === item.variantId);
+      if (prod && prod.basePrice > 0 && variant) {
+        const weight = variant.weightGrams || (variant.label?.includes('1kg') ? 1000 : 500);
+        variant = {
+          ...variant,
+          price: weight === 1000 ? prod.basePrice : Math.max(1, Math.round(prod.basePrice * (weight / 1000)))
+        };
+      }
+      return {
+        ...item,
+        product: prod,
+        variant
+      };
+    });
     return cart;
   }
 

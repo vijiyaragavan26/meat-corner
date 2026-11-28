@@ -156,17 +156,19 @@ export const AdminOrdersPage: React.FC = () => {
     const handleWindowOrder = (e: any) => {
       if (e.detail) {
         const newOrd = e.detail;
+        const ordId = newOrd.orderNumber || newOrd.id;
+        if (!ordId) return; // Prevent corrupt partial events from adding empty rows
         playOrderChime();
         setNewOrderAlert({
-          orderNumber: newOrd.orderNumber || newOrd.id,
+          orderNumber: ordId,
           customerName: newOrd.customerName || newOrd.deliveryAddressSnapshot?.recipientName || 'Customer',
           amount: newOrd.totalAmount || 0
         });
         setOrders((prev) => {
-          if (prev.some((o) => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) {
+          if (prev.some((o) => o && (o.id === ordId || o.orderNumber === ordId))) {
             return prev;
           }
-          return [newOrd, ...prev];
+          return [{ ...newOrd, id: newOrd.id || ordId, orderNumber: newOrd.orderNumber || ordId, createdAt: newOrd.createdAt || new Date().toISOString() }, ...prev];
         });
       }
     };
@@ -181,6 +183,7 @@ export const AdminOrdersPage: React.FC = () => {
   }, [statusFilter]);
 
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
+    if (!orderId) return;
     setIsUpdating(true);
     const targetOrder = orders.find((o) => o && (o.id === orderId || o.orderNumber === orderId));
     const isCod = targetOrder?.paymentMethod === 'COD';
@@ -190,18 +193,20 @@ export const AdminOrdersPage: React.FC = () => {
       ? (isCod ? (targetOrder?.paymentStatus === 'PAID' ? 'PAID' : 'COD_COLLECTED') : 'PAID')
       : undefined;
 
-    // 1. Optimistic Update: immediately update the order status in state so UI reacts instantly
+    // 1. Optimistic Update: safely preserve all existing properties of the order
     setOrders((prev) =>
-      prev.map((o) =>
-        o && (o.id === orderId || o.orderNumber === orderId)
-          ? {
-              ...o,
-              status,
-              paymentStatus: autoPaymentStatus || o.paymentStatus || 'PENDING',
-              updatedAt: new Date().toISOString()
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (!o) return o;
+        if (o.id === orderId || o.orderNumber === orderId) {
+          return {
+            ...o,
+            status,
+            paymentStatus: autoPaymentStatus || o.paymentStatus || 'PENDING',
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return o;
+      })
     );
     if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
       setSelectedOrder((prev) =>
@@ -217,11 +222,11 @@ export const AdminOrdersPage: React.FC = () => {
     }
 
     try {
-      const payload: any = {
-        status,
-        rejectionReason: reason,
-        cancellationReason: reason
-      };
+      const payload: any = { status };
+      if (reason) {
+        payload.rejectionReason = reason;
+        payload.cancellationReason = reason;
+      }
       if (autoPaymentStatus) {
         payload.paymentStatus = autoPaymentStatus;
       }
@@ -230,7 +235,8 @@ export const AdminOrdersPage: React.FC = () => {
         const updated = (res.data?.order || res.data || res) as any;
         setOrders((prev) =>
           prev.map((o) => {
-            if (o && (o.id === orderId || o.orderNumber === orderId)) {
+            if (!o) return o;
+            if (o.id === orderId || o.orderNumber === orderId) {
               const safeItems = Array.isArray(o.items) && o.items.length > 0
                 ? o.items
                 : (Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : []);
@@ -239,11 +245,13 @@ export const AdminOrdersPage: React.FC = () => {
                 ...(typeof updated === 'object' && updated !== null ? updated : {}),
                 id: o.id || updated?.id || orderId,
                 orderNumber: o.orderNumber || updated?.orderNumber || orderId,
+                createdAt: o.createdAt || updated?.createdAt || new Date().toISOString(),
                 status: status || updated?.status || o.status || 'PLACED',
                 paymentStatus: autoPaymentStatus || updated?.paymentStatus || o.paymentStatus || 'PENDING',
                 items: safeItems,
                 customerName: o.customerName || updated?.customerName || 'Customer',
                 customerPhone: o.customerPhone || updated?.customerPhone || '',
+                deliveryAddressSnapshot: o.deliveryAddressSnapshot || updated?.deliveryAddressSnapshot || null,
                 totalAmount: o.totalAmount || updated?.totalAmount || 500,
                 deliveryPartnerName: updated?.deliveryPartnerName !== undefined ? updated.deliveryPartnerName : o.deliveryPartnerName,
                 deliveryPartnerId: updated?.deliveryPartnerId !== undefined ? updated.deliveryPartnerId : o.deliveryPartnerId,
@@ -820,11 +828,11 @@ export const AdminOrdersPage: React.FC = () => {
                       <div className="flex items-center space-x-2.5">
                         {Array.isArray(order.items) && order.items.length > 0 && (
                           <div className="flex -space-x-2 overflow-hidden flex-shrink-0">
-                            {order.items.slice(0, 3).map((it, iIdx) => (
+                            {order.items.filter(Boolean).slice(0, 3).map((it, iIdx) => (
                               <img
                                 key={iIdx}
-                                src={it.imageUrl || it.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
-                                alt={it.productName || 'Chicken Cut'}
+                                src={it?.imageUrl || it?.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
+                                alt={it?.productName || 'Chicken Cut'}
                                 className="w-8 h-8 rounded-lg object-cover border-2 border-white shadow-xs"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80';
@@ -839,10 +847,10 @@ export const AdminOrdersPage: React.FC = () => {
                           </span>
                           <span
                             className="text-[10px] text-gray-500 truncate max-w-[150px] block"
-                            title={Array.isArray(order.items) ? order.items.map(it => `${it.quantity || 1}x ${it.productName || 'Chicken Cut'}`).join(', ') : 'Chicken Cut'}
+                            title={Array.isArray(order.items) ? order.items.filter(Boolean).map(it => `${it?.quantity || 1}x ${it?.productName || 'Chicken Cut'}`).join(', ') : 'Chicken Cut'}
                           >
                             {Array.isArray(order.items) && order.items.length > 0
-                              ? order.items.map((it) => `${it.quantity || 1}x ${it.productName || 'Chicken Cut'}`).join(', ')
+                              ? order.items.filter(Boolean).map((it) => `${it?.quantity || 1}x ${it?.productName || 'Chicken Cut'}`).join(', ')
                               : 'Chicken Cut'}
                           </span>
                         </div>
@@ -1066,7 +1074,7 @@ export const AdminOrdersPage: React.FC = () => {
                 {selectedOrder.status === 'PLACED' && (
                   <button
                     disabled={isUpdating}
-                    onClick={() => handleStatusUpdate(selectedOrder.id, 'CONFIRMED')}
+                    onClick={() => handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'CONFIRMED')}
                     className="bg-green-700 hover:bg-green-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
                   >
                     Confirm Order
@@ -1076,7 +1084,7 @@ export const AdminOrdersPage: React.FC = () => {
                 {['PLACED', 'CONFIRMED', 'PARTNER_ASSIGNED'].includes(selectedOrder.status) && (
                   <button
                     disabled={isUpdating}
-                    onClick={() => handleStatusUpdate(selectedOrder.id, 'PREPARING')}
+                    onClick={() => handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'PREPARING')}
                     className="bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
                   >
                     Start Butchery (Preparing)
@@ -1086,7 +1094,7 @@ export const AdminOrdersPage: React.FC = () => {
                 {['PREPARING', 'CONFIRMED', 'PARTNER_ASSIGNED'].includes(selectedOrder.status) && (
                   <button
                     disabled={isUpdating}
-                    onClick={() => handleStatusUpdate(selectedOrder.id, 'READY_FOR_PICKUP')}
+                    onClick={() => handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'READY_FOR_PICKUP')}
                     className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
                   >
                     Mark Ready for Pickup
@@ -1096,7 +1104,7 @@ export const AdminOrdersPage: React.FC = () => {
                 {['READY_FOR_PICKUP', 'PARTNER_ASSIGNED', 'PICKED_UP'].includes(selectedOrder.status) && (
                   <button
                     disabled={isUpdating}
-                    onClick={() => handleStatusUpdate(selectedOrder.id, 'OUT_FOR_DELIVERY')}
+                    onClick={() => handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'OUT_FOR_DELIVERY')}
                     className="bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
                   >
                     Mark Out for Delivery
@@ -1106,7 +1114,7 @@ export const AdminOrdersPage: React.FC = () => {
                 {selectedOrder.status === 'OUT_FOR_DELIVERY' && (
                   <button
                     disabled={isUpdating}
-                    onClick={() => handleStatusUpdate(selectedOrder.id, 'DELIVERED')}
+                    onClick={() => handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'DELIVERED')}
                     className="bg-green-700 hover:bg-green-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm"
                   >
                     Mark Delivered (Paid)
@@ -1118,7 +1126,7 @@ export const AdminOrdersPage: React.FC = () => {
                     disabled={isUpdating}
                     onClick={() => {
                       const reason = prompt('Please enter cancellation reason:');
-                      if (reason) handleStatusUpdate(selectedOrder.id, 'CANCELLED', reason);
+                      if (reason) handleStatusUpdate(selectedOrder.id || selectedOrder.orderNumber, 'CANCELLED', reason);
                     }}
                     className="bg-red-100 hover:bg-red-200 text-red-800 font-bold text-xs px-3 py-1.5 rounded-xl transition"
                   >

@@ -558,13 +558,14 @@ export const CheckoutPage: React.FC = () => {
                     <span className="text-gray-400">Qty: {Math.max(1, it.quantity || 1)}</span>
                   </div>
                   <span className="font-extrabold text-charcoal">
-                    ₹{(
-                      (it.variant?.price && it.variant.price > 0
-                        ? it.variant.price
-                        : it.product?.basePrice && it.product.basePrice > 0
-                          ? it.product.basePrice
-                          : 250) * Math.max(1, it.quantity || 1)
-                    )}
+                    ₹{(() => {
+                      const basePrice = Number(it.product?.basePrice ?? (it.product as any)?.price ?? 0);
+                      const weight = Number(it.variant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
+                      const unitPrice = basePrice > 0
+                        ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+                        : (Number(it.variant?.price) || 250);
+                      return unitPrice * Math.max(1, it.quantity || 1);
+                    })()}
                   </span>
                 </div>
               ))}

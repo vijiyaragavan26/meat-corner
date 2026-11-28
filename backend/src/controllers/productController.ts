@@ -197,6 +197,25 @@ export const adminUpdateProduct = (req: AuthenticatedRequest, res: Response) => 
     updatedAt: new Date().toISOString()
   };
 
+  if (req.body.variants && Array.isArray(req.body.variants)) {
+    req.body.variants.forEach((v: any) => {
+      const vIdx = db.variants.findIndex((x) => x.id === v.id);
+      if (vIdx !== -1) {
+        db.variants[vIdx] = { ...db.variants[vIdx], ...v };
+      } else {
+        db.variants.push(v);
+      }
+    });
+  } else if (req.body.basePrice) {
+    const bp = Number(req.body.basePrice);
+    db.variants.forEach((v) => {
+      if (v.productId === id) {
+        const weight = v.weightGrams || (v.label?.includes('1kg') ? 1000 : 500);
+        v.price = weight === 1000 ? bp : Math.max(1, Math.round(bp * (weight / 1000)));
+      }
+    });
+  }
+
   db.products[prodIndex] = updated;
   db.saveToDisk();
   return res.json({ success: true, message: 'Product updated successfully', data: updated });

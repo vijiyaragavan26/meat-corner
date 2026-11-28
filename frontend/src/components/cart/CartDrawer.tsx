@@ -162,13 +162,14 @@ export const CartDrawer: React.FC = () => {
 
                     <div className="flex justify-between items-center mt-3">
                       <span className="font-extrabold text-brand-700 text-sm">
-                        ₹{(
-                          (item.variant?.price && item.variant.price > 0
-                            ? item.variant.price
-                            : item.product?.basePrice && item.product.basePrice > 0
-                              ? item.product.basePrice
-                              : 250) * Math.max(1, item.quantity || 1)
-                        )}
+                        ₹{(() => {
+                          const basePrice = Number(item.product?.basePrice ?? (item.product as any)?.price ?? 0);
+                          const weight = Number(item.variant?.weightGrams) || (item.variant?.label?.includes('1kg') ? 1000 : 500);
+                          const unitPrice = basePrice > 0
+                            ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+                            : (Number(item.variant?.price) || 250);
+                          return unitPrice * Math.max(1, item.quantity || 1);
+                        })()}
                       </span>
 
                       {/* Quantity Stepper */}

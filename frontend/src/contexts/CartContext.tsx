@@ -75,12 +75,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const recalculatePricing = (items: any[], couponCode?: string | null) => {
     const subtotal = items.reduce((sum: number, it: any) => {
-      const price = (it.variant?.price && it.variant.price > 0)
-        ? it.variant.price
-        : (it.product?.basePrice && it.product.basePrice > 0)
-          ? it.product.basePrice
-          : 250;
-      return sum + price * (it.quantity || 1);
+      const basePrice = Number(it.product?.basePrice ?? (it.product as any)?.price ?? 0);
+      const weight = Number(it.variant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
+      const price = basePrice > 0
+        ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+        : (Number(it.variant?.price) || 250);
+      return sum + price * Math.max(1, it.quantity || 1);
     }, 0);
     const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
     const discount = couponCode ? 20 : 0;

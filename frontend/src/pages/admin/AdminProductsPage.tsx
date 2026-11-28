@@ -129,16 +129,30 @@ export const AdminProductsPage: React.FC = () => {
         isRecommended
       };
 
+      const newBasePrice = Number(basePrice);
+      const targetVariants = (editingProduct && editingProduct.variants && editingProduct.variants.length > 0)
+        ? editingProduct.variants.map((v) => {
+            const weight = v.weightGrams || (v.label?.includes('1kg') ? 1000 : 500);
+            const calculatedPrice = weight === 1000 ? newBasePrice : Math.max(1, Math.round(newBasePrice * (weight / 1000)));
+            return {
+              ...v,
+              price: calculatedPrice
+            };
+          })
+        : [
+            { id: `var_${editingProduct?.id || 'new'}_500g`, productId: editingProduct?.id || 'new', label: '500g', weightGrams: 500, price: Math.max(1, Math.round(newBasePrice * 0.5)), sku: `MC-${editingProduct?.id || 'new'}-500G`, isActive: true },
+            { id: `var_${editingProduct?.id || 'new'}_1kg`, productId: editingProduct?.id || 'new', label: '1kg', weightGrams: 1000, price: newBasePrice, sku: `MC-${editingProduct?.id || 'new'}-1KG`, isActive: true }
+          ];
+
+      payload.variants = targetVariants;
+
       if (editingProduct) {
         const res = await api.updateAdminProduct(editingProduct.id, payload);
         const updatedProd: Product = {
           ...editingProduct,
           ...payload,
           id: editingProduct.id,
-          variants: editingProduct.variants || [
-            { id: `var_${editingProduct.id}_500g`, productId: editingProduct.id, label: '500g', weightGrams: 500, price: Math.round(Number(basePrice) * 0.52), sku: `MC-${editingProduct.id}-500G`, isActive: true },
-            { id: `var_${editingProduct.id}_1kg`, productId: editingProduct.id, label: '1kg', weightGrams: 1000, price: Number(basePrice), sku: `MC-${editingProduct.id}-1KG`, isActive: true }
-          ]
+          variants: targetVariants
         };
         setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updatedProd : p)));
         setToastMsg(`"${name.trim()}" updated successfully!`);
@@ -146,7 +160,8 @@ export const AdminProductsPage: React.FC = () => {
         const res = await api.createAdminProduct(payload);
         const newProd: Product = res?.data || res || {
           ...payload,
-          id: 'prod_' + Date.now()
+          id: 'prod_' + Date.now(),
+          variants: targetVariants
         };
         setProducts((prev) => [newProd, ...prev]);
         setToastMsg(`"${name.trim()}" added to chicken catalog!`);

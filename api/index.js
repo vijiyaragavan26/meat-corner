@@ -34470,11 +34470,22 @@ var DataStore = class {
       };
       this.carts.set(userId, cart);
     }
-    cart.items = cart.items.map((item) => ({
-      ...item,
-      product: this.getProductById(item.productId),
-      variant: this.variants.find((v) => v.id === item.variantId)
-    }));
+    cart.items = cart.items.map((item) => {
+      const prod = this.getProductById(item.productId);
+      let variant = this.variants.find((v) => v.id === item.variantId);
+      if (prod && prod.basePrice > 0 && variant) {
+        const weight = variant.weightGrams || (variant.label && variant.label.includes("1kg") ? 1e3 : 500);
+        variant = {
+          ...variant,
+          price: weight === 1e3 ? prod.basePrice : Math.max(1, Math.round(prod.basePrice * (weight / 1e3)))
+        };
+      }
+      return {
+        ...item,
+        product: prod,
+        variant
+      };
+    });
     return cart;
   }
   saveCart(cart) {
@@ -34959,6 +34970,24 @@ var adminUpdateProduct = (req, res) => {
     ...req.body,
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
+  if (req.body.variants && Array.isArray(req.body.variants)) {
+    req.body.variants.forEach((v) => {
+      const vIdx = db.variants.findIndex((x) => x.id === v.id);
+      if (vIdx !== -1) {
+        db.variants[vIdx] = { ...db.variants[vIdx], ...v };
+      } else {
+        db.variants.push(v);
+      }
+    });
+  } else if (req.body.basePrice) {
+    const bp = Number(req.body.basePrice);
+    db.variants.forEach((v) => {
+      if (v.productId === id) {
+        const weight = v.weightGrams || (v.label && v.label.includes("1kg") ? 1e3 : 500);
+        v.price = weight === 1e3 ? bp : Math.max(1, Math.round(bp * (weight / 1e3)));
+      }
+    });
+  }
   db.products[prodIndex] = updated;
   db.saveToDisk();
   return res.json({ success: true, message: "Product updated successfully", data: updated });
@@ -35041,8 +35070,12 @@ var getCart = (req, res) => {
   const cart = db.getCart(userId);
   let subtotal = 0;
   cart.items.forEach((item) => {
-    const price = item.variant?.price || item.product?.basePrice || 0;
-    subtotal += price * item.quantity;
+    const basePrice = Number(item.product?.basePrice ?? item.product?.price ?? 0);
+    const weight = Number(item.variant?.weightGrams) || (item.variant?.label && item.variant.label.includes("1kg") ? 1e3 : 500);
+    const price = basePrice > 0
+      ? (weight === 1e3 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1e3))))
+      : (Number(item.variant?.price) || 250);
+    subtotal += price * (item.quantity || 1);
   });
   const settings = db.storeSettings;
   let deliveryFee = subtotal >= settings.freeDeliveryAbove ? 0 : settings.baseDeliveryCharge;
@@ -35181,8 +35214,12 @@ var applyCoupon = (req, res) => {
   const cart = db.getCart(userId);
   let subtotal = 0;
   cart.items.forEach((it) => {
-    const price = it.variant?.price || it.product?.basePrice || 0;
-    subtotal += price * it.quantity;
+    const basePrice = Number(it.product?.basePrice ?? it.product?.price ?? 0);
+    const weight = Number(it.variant?.weightGrams) || (it.variant?.label && it.variant.label.includes("1kg") ? 1e3 : 500);
+    const price = basePrice > 0
+      ? (weight === 1e3 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1e3))))
+      : (Number(it.variant?.price) || 250);
+    subtotal += price * (it.quantity || 1);
   });
   if (subtotal < coupon.minOrderValue) {
     return res.status(400).json({

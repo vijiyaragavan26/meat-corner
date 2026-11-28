@@ -16,8 +16,12 @@ export const getCart = (req: AuthenticatedRequest, res: Response) => {
   // Calculate pricing breakdown
   let subtotal = 0;
   cart.items.forEach((item) => {
-    const price = item.variant?.price || item.product?.basePrice || 0;
-    subtotal += price * item.quantity;
+    const basePrice = Number(item.product?.basePrice ?? item.product?.price ?? 0);
+    const weight = Number(item.variant?.weightGrams) || (item.variant?.label?.includes('1kg') ? 1000 : 500);
+    const price = basePrice > 0
+      ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+      : (Number(item.variant?.price) || 250);
+    subtotal += price * (item.quantity || 1);
   });
 
   const settings = db.storeSettings;
@@ -189,8 +193,12 @@ export const applyCoupon = (req: AuthenticatedRequest, res: Response) => {
   const cart = db.getCart(userId);
   let subtotal = 0;
   cart.items.forEach((it) => {
-    const price = it.variant?.price || it.product?.basePrice || 0;
-    subtotal += price * it.quantity;
+    const basePrice = Number(it.product?.basePrice ?? it.product?.price ?? 0);
+    const weight = Number(it.variant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
+    const price = basePrice > 0
+      ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+      : (Number(it.variant?.price) || 250);
+    subtotal += price * (it.quantity || 1);
   });
 
   if (subtotal < coupon.minOrderValue) {
