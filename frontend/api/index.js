@@ -35460,9 +35460,42 @@ var getOrderById = (req, res) => {
     }
   });
 };
-var adminGetOrders = (req, res) => {
+var adminGetOrders = async (req, res) => {
   const { status, search } = req.query;
   let list = [...db.orders];
+
+  try {
+    const supaRes = await fetch("https://ajiovbilwinoiyjvzhcv.supabase.co/rest/v1/Orders?select=*,OrderItems(*),DeliveryPartners(*)&order=createdAt.desc&limit=100", {
+      headers: {
+        apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc",
+        Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqaW92Ymlsd2lub2l5anZ6aGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1ODEyNDgsImV4cCI6MjExMDE1NzI0OH0.ogK51vYKTyA05C6hGKxZ2VW5fAVv5vGId_WNF8z-mdc"
+      }
+    });
+    if (supaRes.ok) {
+      const supaData = await supaRes.json();
+      if (Array.isArray(supaData) && supaData.length > 0) {
+        const orderMap = new Map();
+        supaData.forEach((o) => {
+          const norm = {
+            ...o,
+            customerName: o.deliveryAddressSnapshot?.recipientName || o.customerName || "Customer",
+            customerPhone: o.deliveryAddressSnapshot?.phone || o.customerPhone || "",
+            items: Array.isArray(o.OrderItems) && o.OrderItems.length > 0 ? o.OrderItems : (o.items || [])
+          };
+          orderMap.set(norm.orderNumber || norm.id, norm);
+        });
+        list.forEach((o) => {
+          if (!orderMap.has(o.orderNumber || o.id)) {
+            orderMap.set(o.orderNumber || o.id, o);
+          }
+        });
+        list = Array.from(orderMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to query Supabase in adminGetOrders:", err);
+  }
+
   if (status && status !== "ALL") {
     list = list.filter((o) => o.status === status);
   }

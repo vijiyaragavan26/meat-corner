@@ -2678,48 +2678,65 @@ export const api = {
       };
     }),
 
-  getAdminOrders: (params?: Record<string, string>) =>
-    callApi(
-      `/orders/admin/all${params ? '?' + new URLSearchParams(params).toString() : ''}`,
-      {},
-      async () => {
-        const localOrders = getLiveOrders();
-        const supaOrders = await fetchSupabaseOrders();
+  getAdminOrders: async (params?: Record<string, string>) => {
+    // 1. Fetch live orders directly from Supabase Cloud Database (cross-device source of truth)
+    const supaOrders = await fetchSupabaseOrders();
+    const localOrders = getLiveOrders();
 
-        const orderMap = new Map<string, any>();
+    const orderMap = new Map<string, any>();
 
-        // 1. Supabase orders first (persisted cross-device cloud orders)
-        supaOrders.forEach((o) => {
-          const key = o.orderNumber || o.id;
-          orderMap.set(key, o);
-        });
+    // 1. Supabase orders first
+    supaOrders.forEach((o) => {
+      const key = o.orderNumber || o.id;
+      orderMap.set(key, o);
+    });
 
-        // 2. Local orders (covers newly placed or recently updated in-memory orders)
-        localOrders.forEach((localOrd) => {
-          const key = localOrd.orderNumber || localOrd.id;
-          if (!orderMap.has(key)) {
-            orderMap.set(key, localOrd);
-          } else {
-            const supaOrd = orderMap.get(key);
-            const localTime = new Date(localOrd.updatedAt || localOrd.createdAt || 0).getTime();
-            const supaTime = new Date(supaOrd.updatedAt || supaOrd.createdAt || 0).getTime();
-            if (localTime > supaTime) {
-              orderMap.set(key, { ...supaOrd, ...localOrd });
-            }
-          }
-        });
-
-        const deletedIds = getDeletedOrderIds();
-        const merged = Array.from(orderMap.values())
-          .filter((o) => o && !deletedIds.has(o.id) && !deletedIds.has(o.orderNumber))
-          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-
-        if (params?.status && params.status !== 'ALL') {
-          return merged.filter((o) => o.status === params.status);
+    // 2. Local orders (covers newly placed or recently updated in-memory orders)
+    localOrders.forEach((localOrd) => {
+      const key = localOrd.orderNumber || localOrd.id;
+      if (!orderMap.has(key)) {
+        orderMap.set(key, localOrd);
+      } else {
+        const supaOrd = orderMap.get(key);
+        const localTime = new Date(localOrd.updatedAt || localOrd.createdAt || 0).getTime();
+        const supaTime = new Date(supaOrd.updatedAt || supaOrd.createdAt || 0).getTime();
+        if (localTime > supaTime) {
+          orderMap.set(key, { ...supaOrd, ...localOrd });
         }
-        return merged;
       }
-    ),
+    });
+
+    // 3. Also query backend API and merge if available
+    try {
+      const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+      const bRes = await fetch(`${API_BASE}/orders/admin/all${qs}`, { headers: getHeaders() });
+      if (bRes.ok) {
+        const json = await bRes.json();
+        if (json.success && Array.isArray(json.data)) {
+          json.data.forEach((bOrd: any) => {
+            const key = bOrd.orderNumber || bOrd.id;
+            if (!orderMap.has(key)) {
+              orderMap.set(key, bOrd);
+            }
+          });
+        }
+      }
+    } catch {}
+
+    const deletedIds = getDeletedOrderIds();
+    let merged = Array.from(orderMap.values())
+      .filter((o) => o && !deletedIds.has(o.id) && !deletedIds.has(o.orderNumber))
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    if (params?.status && params.status !== 'ALL') {
+      merged = merged.filter((o) => o.status === params.status);
+    }
+    return {
+      success: true,
+      count: merged.length,
+      data: merged
+    };
+  },
 
   updateAdminOrderStatus: async (id: string, body: any) => {
     const status = body.status;

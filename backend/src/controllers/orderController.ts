@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db, Order, OrderItem, Address } from '../db/dataStore';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { config } from '../config';
 
 export const createOrder = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -265,9 +266,41 @@ export const getOrderById = (req: AuthenticatedRequest, res: Response) => {
 };
 
 // Admin Order Endpoints
-export const adminGetOrders = (req: AuthenticatedRequest, res: Response) => {
+export const adminGetOrders = async (req: AuthenticatedRequest, res: Response) => {
   const { status, search } = req.query;
   let list = [...db.orders];
+
+  try {
+    const supaRes = await fetch(`${config.supabaseUrl}/rest/v1/Orders?select=*,OrderItems(*),DeliveryPartners(*)&order=createdAt.desc&limit=100`, {
+      headers: {
+        apikey: config.supabaseAnonKey,
+        Authorization: `Bearer ${config.supabaseAnonKey}`
+      }
+    });
+    if (supaRes.ok) {
+      const supaData: any = await supaRes.json();
+      if (Array.isArray(supaData) && supaData.length > 0) {
+        const orderMap = new Map<string, any>();
+        supaData.forEach((o: any) => {
+          const norm = {
+            ...o,
+            customerName: o.deliveryAddressSnapshot?.recipientName || o.customerName || 'Customer',
+            customerPhone: o.deliveryAddressSnapshot?.phone || o.customerPhone || '',
+            items: Array.isArray(o.OrderItems) && o.OrderItems.length > 0 ? o.OrderItems : (o.items || [])
+          };
+          orderMap.set(norm.orderNumber || norm.id, norm);
+        });
+        list.forEach((o) => {
+          if (!orderMap.has(o.orderNumber || o.id)) {
+            orderMap.set(o.orderNumber || o.id, o);
+          }
+        });
+        list = Array.from(orderMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to query Supabase in adminGetOrders:', err);
+  }
 
   if (status && status !== 'ALL') {
     list = list.filter((o) => o.status === status);
