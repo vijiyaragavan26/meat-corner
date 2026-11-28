@@ -30,13 +30,28 @@ export const Header: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const leaveTimerRef = useRef<any>(null);
+
+  const handleMouseEnterMenu = () => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+  };
+
+  const handleMouseLeaveMenu = () => {
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    leaveTimerRef.current = setTimeout(() => {
+      setIsProfileOpen(false);
+    }, 450);
+  };
 
   // Auto-close Profile Menu whenever navigating to any page
   useEffect(() => {
     setIsProfileOpen(false);
   }, [routeLocation.pathname, routeLocation.search]);
 
-  // Close menu on click outside or when pressing Escape
+  // Close menu on click outside, scroll, or when pressing Escape
   useEffect(() => {
     if (!isProfileOpen) return;
 
@@ -58,14 +73,20 @@ export const Header: React.FC = () => {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
+    const handleScroll = () => {
+      setIsProfileOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('touchstart', handleClickOutside, true);
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('touchstart', handleClickOutside, true);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScroll);
     };
   }, [isProfileOpen]);
 
@@ -194,7 +215,11 @@ export const Header: React.FC = () => {
             </button>
 
             {/* User Account / Profile Trigger Button */}
-            <div className="relative">
+            <div
+              className="relative"
+              onMouseEnter={handleMouseEnterMenu}
+              onMouseLeave={handleMouseLeaveMenu}
+            >
               <button
                 ref={buttonRef}
                 type="button"
@@ -235,10 +260,13 @@ export const Header: React.FC = () => {
               {/* Profile Menu Dropdown */}
               {isProfileOpen && (
                 <>
-                  {/* Backdrop for closing on outside click on mobile */}
+                  {/* Backdrop for closing on outside click across mobile and desktop */}
                   <div
-                    className="fixed inset-0 z-40 bg-black/20 md:hidden backdrop-blur-[1px] animate-in fade-in duration-150"
-                    onClick={() => setIsProfileOpen(false)}
+                    className="fixed inset-0 z-40 bg-black/10 md:bg-transparent"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsProfileOpen(false);
+                    }}
                     aria-hidden="true"
                   />
 
