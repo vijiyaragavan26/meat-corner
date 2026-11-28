@@ -167,15 +167,6 @@ export const Header: React.FC = () => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3 sm:space-x-4">
-            {/* 100+ Cuts Catalogue link */}
-            <Link
-              to="/cuts"
-              onClick={() => setIsProfileOpen(false)}
-              className="hidden sm:inline-flex items-center space-x-1.5 text-xs font-black text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full border border-brand-200 transition shadow-sm"
-            >
-              <span>🍗 100+ Cuts Catalogue</span>
-            </Link>
-
             {/* Categories link */}
             <Link
               to="/products"
