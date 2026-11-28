@@ -278,7 +278,11 @@ export const CartDrawer: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-500">
-                  <span>Taxes (GST 5%)</span>
+                  <span>
+                    {pricing.tax === 0
+                      ? 'Taxes (0% GST - Exempt)'
+                      : `Taxes (${pricing.subtotal > 0 ? Math.round((pricing.tax / pricing.subtotal) * 100) : 5}% GST)`}
+                  </span>
                   <span className="font-semibold text-charcoal">₹{pricing.tax}</span>
                 </div>
                 <div className="flex justify-between text-sm font-black text-charcoal pt-2 border-t border-gray-100">

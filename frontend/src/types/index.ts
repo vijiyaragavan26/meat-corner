@@ -52,6 +52,8 @@ export interface Product {
   cleaningOptions: string[];
   basePrice: number;
   discountPercent: number;
+  gstPercent?: number;
+  deliveryFee?: number;
   isBestSeller: boolean;
   isTodaySpecial: boolean;
   isRecommended: boolean;
@@ -280,6 +282,8 @@ export interface StoreSettings {
   }>;
   baseDeliveryCharge: number;
   freeDeliveryAbove: number;
+  taxPercent?: number;
+  minOrderAmount?: number;
 }
 
 export interface SupportTicket {

@@ -593,7 +593,11 @@ export const CheckoutPage: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between text-gray-500">
-                <span>Taxes (5% GST)</span>
+                <span>
+                  {pricing.tax === 0
+                    ? 'Taxes (0% GST - Exempt)'
+                    : `Taxes (${pricing.subtotal > 0 ? Math.round((pricing.tax / pricing.subtotal) * 100) : 5}% GST)`}
+                </span>
                 <span className="font-semibold text-charcoal">₹{pricing.tax}</span>
               </div>
               <div className="flex justify-between text-base font-black text-charcoal pt-3 border-t border-gray-100">

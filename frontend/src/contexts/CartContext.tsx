@@ -71,8 +71,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     window.addEventListener('meat_corner_cart_cleared', onCartCleared);
+    const onSettingsUpdated = () => {
+      refreshCart();
+    };
+    window.addEventListener('meat_corner_settings_updated', onSettingsUpdated);
     return () => {
       window.removeEventListener('meat_corner_cart_cleared', onCartCleared);
+      window.removeEventListener('meat_corner_settings_updated', onSettingsUpdated);
     };
   }, []);
 
@@ -101,17 +106,42 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const recalculatePricing = (items: any[], couponCode?: string | null) => {
+    let storeSettings: any = null;
+    try {
+      storeSettings = JSON.parse(localStorage.getItem('meat_corner_store_settings') || 'null');
+    } catch {}
+
+    const baseDelivery = storeSettings?.baseDeliveryCharge !== undefined ? Number(storeSettings.baseDeliveryCharge) : 30;
+    const freeDeliveryAbove = storeSettings?.freeDeliveryAbove !== undefined ? Number(storeSettings.freeDeliveryAbove) : 499;
+    const storeTaxPercent = storeSettings?.taxPercent !== undefined ? Number(storeSettings.taxPercent) : 5;
+
+    let customDeliveryFee: number | null = null;
+    let calculatedTax = 0;
+
     const subtotal = items.reduce((sum: number, it: any) => {
       const basePrice = Number(it.product?.basePrice ?? (it.product as any)?.price ?? 0);
       const weight = Number(it.variant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
       const price = basePrice > 0
         ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
         : (Number(it.variant?.price) || 250);
-      return sum + price * Math.max(1, it.quantity || 1);
+      const itemSubtotal = price * Math.max(1, it.quantity || 1);
+
+      if (it.product?.deliveryFee !== undefined && it.product?.deliveryFee !== null) {
+        customDeliveryFee = Number(it.product.deliveryFee);
+      }
+      const itemGst = it.product?.gstPercent !== undefined ? Number(it.product.gstPercent) : storeTaxPercent;
+      calculatedTax += (itemSubtotal * (itemGst / 100));
+
+      return sum + itemSubtotal;
     }, 0);
-    const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
+
+    const deliveryFee = subtotal === 0
+      ? 0
+      : (subtotal >= freeDeliveryAbove
+        ? 0
+        : (customDeliveryFee !== null ? customDeliveryFee : baseDelivery));
     const discount = couponCode ? 20 : 0;
-    const tax = Math.round(subtotal * 0.05);
+    const tax = Math.round(calculatedTax);
     const total = Math.max(0, subtotal + deliveryFee - discount + tax);
     return {
       subtotal,
@@ -119,8 +149,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       discount,
       tax,
       total,
-      freeDeliveryThreshold: 499,
-      freeDeliveryRemaining: Math.max(0, 499 - subtotal),
+      freeDeliveryThreshold: freeDeliveryAbove,
+      freeDeliveryRemaining: Math.max(0, freeDeliveryAbove - subtotal),
     };
   };
 

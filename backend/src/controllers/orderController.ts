@@ -119,8 +119,28 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    // Delivery charge calculation
-    let deliveryCharge = subtotal >= settings.freeDeliveryAbove ? 0 : settings.baseDeliveryCharge;
+    // Delivery charge & tax calculation with product override support
+    let customDeliveryFee: number | null = null;
+    let calculatedTax = 0;
+
+    cart.items.forEach((item: any) => {
+      const basePrice = Number(item.product?.basePrice ?? item.product?.price ?? 0);
+      const weight = Number(item.variant?.weightGrams) || (item.variant?.label?.includes('1kg') ? 1000 : 500);
+      const price = basePrice > 0
+        ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+        : (Number(item.variant?.price) || 250);
+      const itemSubtotal = price * (item.quantity || 1);
+
+      if (item.product?.deliveryFee !== undefined && item.product?.deliveryFee !== null) {
+        customDeliveryFee = Number(item.product.deliveryFee);
+      }
+      const itemGst = item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (settings.taxPercent ?? 5);
+      calculatedTax += (itemSubtotal * (itemGst / 100));
+    });
+
+    let deliveryCharge = subtotal >= settings.freeDeliveryAbove
+      ? 0
+      : (customDeliveryFee !== null ? customDeliveryFee : settings.baseDeliveryCharge);
 
     // Coupon discount calculation
     let discountAmount = 0;
@@ -140,7 +160,7 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response) => {
       }
     }
 
-    const taxAmount = Math.round(((subtotal - discountAmount) * settings.taxPercent) / 100);
+    const taxAmount = Math.round(calculatedTax);
     const totalAmount = Math.max(0, subtotal - discountAmount + deliveryCharge + taxAmount);
 
     // 6. Generate unique Order ID & Delivery OTP

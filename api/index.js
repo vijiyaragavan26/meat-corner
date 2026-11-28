@@ -35078,8 +35078,22 @@ var getCart = (req, res) => {
     subtotal += price * (item.quantity || 1);
   });
   const settings = db.storeSettings;
-  let deliveryFee = subtotal >= settings.freeDeliveryAbove ? 0 : settings.baseDeliveryCharge;
-  if (subtotal === 0) deliveryFee = 0;
+  let customDeliveryFee = null;
+  let calculatedTax = 0;
+  cart.items.forEach((item) => {
+    const basePrice = Number(item.product?.basePrice ?? item.product?.price ?? 0);
+    const weight = Number(item.variant?.weightGrams) || (item.variant?.label?.includes('1kg') ? 1000 : 500);
+    const price = basePrice > 0
+      ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+      : (Number(item.variant?.price) || 250);
+    const itemSubtotal = price * (item.quantity || 1);
+    if (item.product?.deliveryFee !== undefined && item.product?.deliveryFee !== null) {
+      customDeliveryFee = Number(item.product.deliveryFee);
+    }
+    const itemGst = item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (settings.taxPercent ?? 5);
+    calculatedTax += (itemSubtotal * (itemGst / 100));
+  });
+  let deliveryFee = subtotal === 0 ? 0 : (subtotal >= settings.freeDeliveryAbove ? 0 : (customDeliveryFee !== null ? customDeliveryFee : settings.baseDeliveryCharge));
   let discount = 0;
   let appliedCoupon = null;
   if (cart.couponCode) {
@@ -35098,7 +35112,7 @@ var getCart = (req, res) => {
       }
     }
   }
-  const tax = Math.round((subtotal - discount) * settings.taxPercent / 100);
+  const tax = Math.round(calculatedTax);
   const total = Math.max(0, subtotal - discount + deliveryFee + tax);
   return res.json({
     success: true,
@@ -35354,7 +35368,22 @@ var createOrder = async (req, res) => {
         message: `Minimum order amount is \u20B9${settings.minOrderAmount}. Current subtotal is \u20B9${subtotal}.`
       });
     }
-    let deliveryCharge = subtotal >= settings.freeDeliveryAbove ? 0 : settings.baseDeliveryCharge;
+    let customDeliveryFee = null;
+    let calculatedTax = 0;
+    cart.items.forEach((item) => {
+      const basePrice = Number(item.product?.basePrice ?? item.product?.price ?? 0);
+      const weight = Number(item.variant?.weightGrams) || (item.variant?.label?.includes('1kg') ? 1000 : 500);
+      const price = basePrice > 0
+        ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
+        : (Number(item.variant?.price) || 250);
+      const itemSubtotal = price * (item.quantity || 1);
+      if (item.product?.deliveryFee !== undefined && item.product?.deliveryFee !== null) {
+        customDeliveryFee = Number(item.product.deliveryFee);
+      }
+      const itemGst = item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (settings.taxPercent ?? 5);
+      calculatedTax += (itemSubtotal * (itemGst / 100));
+    });
+    let deliveryCharge = subtotal >= settings.freeDeliveryAbove ? 0 : (customDeliveryFee !== null ? customDeliveryFee : settings.baseDeliveryCharge);
     let discountAmount = 0;
     const effectiveCouponCode = couponCode || cart.couponCode;
     if (effectiveCouponCode) {
@@ -35371,7 +35400,7 @@ var createOrder = async (req, res) => {
         coupon.usedCount += 1;
       }
     }
-    const taxAmount = Math.round((subtotal - discountAmount) * settings.taxPercent / 100);
+    const taxAmount = Math.round(calculatedTax);
     const totalAmount = Math.max(0, subtotal - discountAmount + deliveryCharge + taxAmount);
     const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
     const randPart = Math.floor(1e3 + Math.random() * 9e3);

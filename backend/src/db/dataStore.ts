@@ -65,6 +65,8 @@ export interface Product {
   cleaningOptions: string[];
   basePrice: number;
   discountPercent: number;
+  gstPercent?: number;
+  deliveryFee?: number;
   isBestSeller: boolean;
   isTodaySpecial: boolean;
   isRecommended: boolean;

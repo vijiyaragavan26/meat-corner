@@ -1113,17 +1113,42 @@ function updateLiveCartPricing() {
     };
   });
 
+  let storeSettings: any = null;
+  try {
+    storeSettings = JSON.parse(localStorage.getItem('meat_corner_store_settings') || 'null');
+  } catch {}
+
+  const baseDelivery = storeSettings?.baseDeliveryCharge !== undefined ? Number(storeSettings.baseDeliveryCharge) : 30;
+  const freeDeliveryAbove = storeSettings?.freeDeliveryAbove !== undefined ? Number(storeSettings.freeDeliveryAbove) : 499;
+  const storeTaxPercent = storeSettings?.taxPercent !== undefined ? Number(storeSettings.taxPercent) : 5;
+
+  let customDeliveryFee: number | null = null;
+  let calculatedTax = 0;
+
   const subtotal = liveCart.items.reduce((sum: number, it: any) => {
     const basePrice = Number(it.product?.basePrice ?? it.product?.price ?? 0);
     const weight = Number(it.variant?.weightGrams) || (it.variant?.label?.includes('1kg') ? 1000 : 500);
     const price = basePrice > 0
       ? (weight === 1000 ? basePrice : Math.max(1, Math.round(basePrice * (weight / 1000))))
       : (Number(it.variant?.price) || 250);
-    return sum + price * (it.quantity || 1);
+    const itemSubtotal = price * (it.quantity || 1);
+
+    if (it.product?.deliveryFee !== undefined && it.product?.deliveryFee !== null) {
+      customDeliveryFee = Number(it.product.deliveryFee);
+    }
+    const itemGst = it.product?.gstPercent !== undefined ? Number(it.product.gstPercent) : storeTaxPercent;
+    calculatedTax += (itemSubtotal * (itemGst / 100));
+
+    return sum + itemSubtotal;
   }, 0);
-  const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 30;
+
+  const deliveryFee = subtotal === 0
+    ? 0
+    : (subtotal >= freeDeliveryAbove
+      ? 0
+      : (customDeliveryFee !== null ? customDeliveryFee : baseDelivery));
   const discount = liveCart.discountAmount || 0;
-  const tax = Math.round(subtotal * 0.05);
+  const tax = Math.round(calculatedTax);
   const total = Math.max(0, subtotal + deliveryFee - discount + tax);
 
   liveCart.subtotal = subtotal;
@@ -1136,8 +1161,8 @@ function updateLiveCartPricing() {
     discount,
     tax,
     total,
-    freeDeliveryThreshold: 499,
-    freeDeliveryRemaining: Math.max(0, 499 - subtotal)
+    freeDeliveryThreshold: freeDeliveryAbove,
+    freeDeliveryRemaining: Math.max(0, freeDeliveryAbove - subtotal)
   };
   saveLiveCart();
   return liveCart;
@@ -3139,6 +3164,8 @@ export const api = {
       categoryId: body.categoryId,
       basePrice,
       discountPercent: Number(body.discountPercent || 0),
+      gstPercent: body.gstPercent !== undefined ? Number(body.gstPercent) : 5,
+      deliveryFee: body.deliveryFee !== undefined ? Number(body.deliveryFee) : 30,
       description: body.description || 'Fresh farm-raised chicken cut and packed hygienically.',
       shortDescription: body.shortDescription || '100% farm fresh chicken cut on order.',
       images: body.images && body.images.length ? body.images : ['https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
@@ -3593,26 +3620,44 @@ export const api = {
     callApi('/admin/coupons/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => body),
 
   getAdminSettings: () =>
-    callApi('/admin/settings', {}, () => ({
-      storeName: 'MEAT CORNER',
-      contactPhone: '+91 93607 61595',
-      contactEmail: 'mboopesh60@gmail.com',
-      address: '115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116',
-      freeDeliveryAbove: 499,
-      baseDeliveryCharge: 30,
-      perKmCharge: 8,
-      minOrderAmount: 150,
-      taxPercent: 5,
-      serviceableAreas: [
-        {
-          name: 'Erode Central & Outer',
-          pincodes: ['638001', '638002', '638009', '638011', '638116'],
-        },
-      ],
-    })),
+    callApi('/admin/settings', {}, () => {
+      try {
+        const stored = localStorage.getItem('meat_corner_store_settings');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+      return {
+        storeName: 'MEAT CORNER',
+        contactPhone: '+91 93607 61595',
+        contactEmail: 'mboopesh60@gmail.com',
+        address: '115/1 Main Street, Anna Nagar, Pallapalayam, Perundurai, Erode - 638116',
+        freeDeliveryAbove: 499,
+        baseDeliveryCharge: 30,
+        perKmCharge: 8,
+        minOrderAmount: 150,
+        taxPercent: 5,
+        serviceableAreas: [
+          {
+            name: 'Erode Central & Outer',
+            pincodes: ['638001', '638002', '638009', '638011', '638116'],
+          },
+        ],
+      };
+    }),
 
   updateAdminSettings: (body: any) =>
-    callApi('/admin/settings', { method: 'PUT', body: JSON.stringify(body) }, () => body),
+    callApi('/admin/settings', { method: 'PUT', body: JSON.stringify(body) }, () => {
+      try {
+        const existing = JSON.parse(localStorage.getItem('meat_corner_store_settings') || '{}');
+        const updated = { ...existing, ...body, updatedAt: new Date().toISOString() };
+        localStorage.setItem('meat_corner_store_settings', JSON.stringify(updated));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('meat_corner_settings_updated', { detail: updated }));
+        }
+        return updated;
+      } catch {
+        return body;
+      }
+    }),
 
   getAdminTickets: () =>
     callApi('/admin/tickets', {}, () => [

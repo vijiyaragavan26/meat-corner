@@ -16,6 +16,7 @@ export const AdminSettingsPage: React.FC = () => {
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState<number>(30);
   const [freeDeliveryAbove, setFreeDeliveryAbove] = useState<number>(499);
   const [minOrderAmount, setMinOrderAmount] = useState<number>(149);
+  const [taxPercent, setTaxPercent] = useState<number>(5);
   const [pincodesInput, setPincodesInput] = useState('');
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export const AdminSettingsPage: React.FC = () => {
           setBaseDeliveryCharge(s.baseDeliveryCharge);
           setFreeDeliveryAbove(s.freeDeliveryAbove);
           setMinOrderAmount(s.minOrderAmount);
+          setTaxPercent(s.taxPercent !== undefined ? s.taxPercent : 5);
           const pins = s.serviceableAreas?.[0]?.pincodes || [];
           setPincodesInput(pins.join(', '));
         }
@@ -57,6 +59,7 @@ export const AdminSettingsPage: React.FC = () => {
         baseDeliveryCharge: Number(baseDeliveryCharge),
         freeDeliveryAbove: Number(freeDeliveryAbove),
         minOrderAmount: Number(minOrderAmount),
+        taxPercent: Number(taxPercent),
         serviceableAreas: [
           {
             id: 'primary-zone',
@@ -154,14 +157,14 @@ export const AdminSettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Delivery Charges & Minimums */}
+        {/* Delivery Charges, Taxes & Minimums */}
         <div className="space-y-4 pt-4 border-t border-gray-100">
           <h3 className="font-black text-base text-charcoal flex items-center space-x-2">
             <DollarSign className="w-4 h-4 text-brand-700" />
-            <span>Delivery Fees & Thresholds</span>
+            <span>Delivery Fees, Taxes & Thresholds</span>
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Base Delivery Fee (₹)</label>
               <input
@@ -183,7 +186,19 @@ export const AdminSettingsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Minimum Order Amount (₹)</label>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Standard GST (%)</label>
+              <input
+                type="number"
+                required
+                min={0}
+                max={28}
+                value={taxPercent}
+                onChange={(e) => setTaxPercent(Number(e.target.value))}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Min Order Amount (₹)</label>
               <input
                 type="number"
                 required

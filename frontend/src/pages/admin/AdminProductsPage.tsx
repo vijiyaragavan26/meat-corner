@@ -32,6 +32,8 @@ export const AdminProductsPage: React.FC = () => {
   const [categoryId, setCategoryId] = useState('');
   const [basePrice, setBasePrice] = useState<number>(250);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [gstPercent, setGstPercent] = useState<number>(5);
+  const [deliveryFee, setDeliveryFee] = useState<number>(30);
   const [description, setDescription] = useState('');
   const [shortDescription, setShortDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -75,6 +77,8 @@ export const AdminProductsPage: React.FC = () => {
     setCategoryId(categories[0]?.id || 'cat_curry');
     setBasePrice(250);
     setDiscountPercent(0);
+    setGstPercent(5);
+    setDeliveryFee(30);
     setDescription('Fresh farm-raised chicken cut and packed hygienically.');
     setShortDescription('100% farm fresh chicken cut on order.');
     setImageUrl('https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80');
@@ -90,6 +94,8 @@ export const AdminProductsPage: React.FC = () => {
     setCategoryId(p.categoryId || categories[0]?.id || 'cat_curry');
     setBasePrice(p.basePrice || 250);
     setDiscountPercent(p.discountPercent || 0);
+    setGstPercent(p.gstPercent !== undefined ? p.gstPercent : 5);
+    setDeliveryFee(p.deliveryFee !== undefined ? p.deliveryFee : 30);
     setDescription(p.description || '');
     setShortDescription(p.shortDescription || '');
     setImageUrl(p.images?.[0] || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80');
@@ -121,6 +127,8 @@ export const AdminProductsPage: React.FC = () => {
         categoryId,
         basePrice: Number(basePrice),
         discountPercent: Number(discountPercent || 0),
+        gstPercent: Number(gstPercent !== undefined ? gstPercent : 5),
+        deliveryFee: Number(deliveryFee !== undefined ? deliveryFee : 30),
         description: description.trim() || 'Fresh farm-raised chicken cut and packed hygienically.',
         shortDescription: shortDescription.trim() || '100% farm fresh chicken cut on order.',
         images: [imageUrl.trim() || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'],
@@ -303,6 +311,14 @@ export const AdminProductsPage: React.FC = () => {
                     <span className="font-black text-brand-700 text-lg">₹{product.basePrice}/kg</span>
                     <span className="text-[10px] text-gray-400 font-semibold">{product.variants?.length || 2} weight packs</span>
                   </div>
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-bold">
+                      GST: {product.gstPercent !== undefined ? product.gstPercent : 5}%
+                    </span>
+                    <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-bold">
+                      Delivery: {product.deliveryFee === 0 ? 'FREE' : `₹${product.deliveryFee !== undefined ? product.deliveryFee : 30}`}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -423,6 +439,36 @@ export const AdminProductsPage: React.FC = () => {
                     placeholder="https://images.unsplash.com/..."
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-brand-700"
                   />
+                </div>
+              </div>
+
+              {/* GST / Tax (%) and Delivery Fee (₹) */}
+              <div className="grid grid-cols-2 gap-3 bg-amber-50/50 p-3 rounded-2xl border border-amber-100">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-700 mb-1">GST / Tax (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={28}
+                    value={gstPercent}
+                    onChange={(e) => setGstPercent(Number(e.target.value))}
+                    placeholder="5 or 0"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:border-brand-700"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">e.g. 0% fresh, 5% standard</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-700 mb-1">Delivery Fee (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={deliveryFee}
+                    onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                    placeholder="30 or 0"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:border-brand-700"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">₹0 = Free, or custom fee</p>
                 </div>
               </div>
 
