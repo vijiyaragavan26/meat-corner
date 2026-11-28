@@ -19,6 +19,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
@@ -174,9 +175,11 @@ export const AdminLayout: React.FC = () => {
           </div>
         </header>
 
-        {/* Page View */}
+        {/* Page View with Error Boundary */}
         <main className="p-6 sm:p-8 flex-1 overflow-y-auto">
-          <Outlet />
+          <ErrorBoundary fallbackTitle="Operations Hub encountered an error">
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

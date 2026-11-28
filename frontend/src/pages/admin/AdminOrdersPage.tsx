@@ -37,6 +37,18 @@ export const AdminOrdersPage: React.FC = () => {
     amount: number;
   } | null>(null);
 
+  const safeFormatTime = (dateVal: any) => {
+    if (!dateVal) return 'Recent';
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? 'Recent' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const safeFormatDateTime = (dateVal: any) => {
+    if (!dateVal) return 'Recent';
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? 'Recent' : d.toLocaleString();
+  };
+
   const playOrderChime = () => {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -155,7 +167,7 @@ export const AdminOrdersPage: React.FC = () => {
 
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, reason?: string) => {
     setIsUpdating(true);
-    const targetOrder = orders.find((o) => o.id === orderId || o.orderNumber === orderId);
+    const targetOrder = orders.find((o) => o && (o.id === orderId || o.orderNumber === orderId));
     const isCod = targetOrder?.paymentMethod === 'COD';
     const isDelivered = status === 'DELIVERED';
     // For COD, delivery moves to COD_COLLECTED if not already settled to PAID; online moves to PAID
@@ -166,11 +178,11 @@ export const AdminOrdersPage: React.FC = () => {
     // 1. Optimistic Update: immediately update the order status in state so UI reacts instantly
     setOrders((prev) =>
       prev.map((o) =>
-        (o.id === orderId || o.orderNumber === orderId)
+        o && (o.id === orderId || o.orderNumber === orderId)
           ? {
               ...o,
               status,
-              paymentStatus: autoPaymentStatus || o.paymentStatus,
+              paymentStatus: autoPaymentStatus || o.paymentStatus || 'PENDING',
               updatedAt: new Date().toISOString()
             }
           : o
@@ -182,7 +194,7 @@ export const AdminOrdersPage: React.FC = () => {
           ? {
               ...prev,
               status,
-              paymentStatus: autoPaymentStatus || prev.paymentStatus,
+              paymentStatus: autoPaymentStatus || prev.paymentStatus || 'PENDING',
               updatedAt: new Date().toISOString()
             }
           : null
@@ -203,18 +215,23 @@ export const AdminOrdersPage: React.FC = () => {
         const updated = (res.data?.order || res.data || res) as any;
         setOrders((prev) =>
           prev.map((o) => {
-            if (o.id === orderId || o.orderNumber === orderId) {
+            if (o && (o.id === orderId || o.orderNumber === orderId)) {
+              const safeItems = Array.isArray(o.items) && o.items.length > 0
+                ? o.items
+                : (Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : []);
               return {
                 ...o,
-                ...updated,
-                status: status || updated?.status || o.status,
-                paymentStatus: autoPaymentStatus || updated?.paymentStatus || o.paymentStatus,
-                items: Array.isArray(o.items) && o.items.length > 0 ? o.items : (Array.isArray(updated?.items) ? updated.items : []),
-                orderNumber: updated?.orderNumber || o.orderNumber || '',
-                customerName: updated?.customerName || o.customerName || 'Customer',
-                customerPhone: updated?.customerPhone || o.customerPhone || '',
-                totalAmount: updated?.totalAmount || o.totalAmount || 500,
-                deliveryPartnerName: updated?.deliveryPartnerName || o.deliveryPartnerName,
+                ...(typeof updated === 'object' && updated !== null ? updated : {}),
+                id: o.id || updated?.id || orderId,
+                orderNumber: o.orderNumber || updated?.orderNumber || orderId,
+                status: status || updated?.status || o.status || 'PLACED',
+                paymentStatus: autoPaymentStatus || updated?.paymentStatus || o.paymentStatus || 'PENDING',
+                items: safeItems,
+                customerName: o.customerName || updated?.customerName || 'Customer',
+                customerPhone: o.customerPhone || updated?.customerPhone || '',
+                totalAmount: o.totalAmount || updated?.totalAmount || 500,
+                deliveryPartnerName: updated?.deliveryPartnerName !== undefined ? updated.deliveryPartnerName : o.deliveryPartnerName,
+                deliveryPartnerId: updated?.deliveryPartnerId !== undefined ? updated.deliveryPartnerId : o.deliveryPartnerId,
               };
             }
             return o;
@@ -225,10 +242,12 @@ export const AdminOrdersPage: React.FC = () => {
             prev
               ? {
                   ...prev,
-                  ...updated,
-                  status: status || updated?.status || prev.status,
-                  paymentStatus: autoPaymentStatus || updated?.paymentStatus || prev.paymentStatus,
-                  items: Array.isArray(prev.items) && prev.items.length > 0 ? prev.items : (updated?.items || []),
+                  ...(typeof updated === 'object' && updated !== null ? updated : {}),
+                  status: status || updated?.status || prev.status || 'PLACED',
+                  paymentStatus: autoPaymentStatus || updated?.paymentStatus || prev.paymentStatus || 'PENDING',
+                  items: Array.isArray(prev.items) && prev.items.length > 0
+                    ? prev.items
+                    : (Array.isArray(updated?.items) && updated.items.length > 0 ? updated.items : []),
                 }
               : null
           );
@@ -443,9 +462,11 @@ export const AdminOrdersPage: React.FC = () => {
     let pendingCount = 0;
 
     orders.forEach((o) => {
+      if (!o) return;
       const amt = Number(o.totalAmount) || 0;
-      if (o.status === 'DELIVERED') deliveredCount++;
-      else if (o.status !== 'CANCELLED') pendingCount++;
+      const st = o.status || 'PLACED';
+      if (st === 'DELIVERED') deliveredCount++;
+      else if (st !== 'CANCELLED' && st !== 'REJECTED') pendingCount++;
 
       if (o.paymentMethod === 'ONLINE' || o.paymentMethod === 'RAZORPAY') {
         if (o.paymentStatus === 'PAID') {
@@ -477,24 +498,31 @@ export const AdminOrdersPage: React.FC = () => {
       settledRevenue,
       deliveredCount,
       pendingCount,
-      totalOrders: orders.length,
+      totalOrders: (orders || []).length,
     };
   }, [orders]);
 
-  const filteredOrders = orders.filter((o) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const recipient = o.deliveryAddressSnapshot?.recipientName?.toLowerCase() || '';
-    const recipientPhone = o.deliveryAddressSnapshot?.phone || '';
-    return (
-      o.orderNumber.toLowerCase().includes(q) ||
-      o.customerName?.toLowerCase().includes(q) ||
-      o.customerPhone?.includes(q) ||
-      recipient.includes(q) ||
-      recipientPhone.includes(q) ||
-      o.deliveryAddressSnapshot?.area?.toLowerCase().includes(q)
-    );
-  });
+  const filteredOrders = useMemo(() => {
+    return (orders || []).filter((o) => {
+      if (!o) return false;
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase().trim();
+      const ordNum = String(o.orderNumber || o.id || '').toLowerCase();
+      const cName = String(o.customerName || '').toLowerCase();
+      const cPhone = String(o.customerPhone || '');
+      const rName = String(o.deliveryAddressSnapshot?.recipientName || '').toLowerCase();
+      const rPhone = String(o.deliveryAddressSnapshot?.phone || '');
+      const area = String(o.deliveryAddressSnapshot?.area || '').toLowerCase();
+      return (
+        ordNum.includes(q) ||
+        cName.includes(q) ||
+        cPhone.includes(q) ||
+        rName.includes(q) ||
+        rPhone.includes(q) ||
+        area.includes(q)
+      );
+    });
+  }, [orders, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -653,9 +681,7 @@ export const AdminOrdersPage: React.FC = () => {
                     <td className="py-3.5 px-4">
                       <span className="font-mono font-bold text-charcoal block">{order.orderNumber || order.id}</span>
                       <span className="text-[10px] text-gray-400">
-                        {order.createdAt && !isNaN(new Date(order.createdAt).getTime())
-                          ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : 'Recent'} • {order.deliverySlot || 'Express (30-45 mins)'}
+                        {safeFormatTime(order.createdAt)} • {order.deliverySlot || 'Express (30-45 mins)'}
                       </span>
                     </td>
 
@@ -681,7 +707,7 @@ export const AdminOrdersPage: React.FC = () => {
                               <img
                                 key={iIdx}
                                 src={it.imageUrl || it.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
-                                alt={it.productName}
+                                alt={it.productName || 'Chicken Cut'}
                                 className="w-8 h-8 rounded-lg object-cover border-2 border-white shadow-xs"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80';
@@ -692,11 +718,14 @@ export const AdminOrdersPage: React.FC = () => {
                         )}
                         <div>
                           <span className="font-bold text-charcoal block">
-                            {Array.isArray(order.items) ? order.items.length : 0} {order.items.length === 1 ? 'Cut' : 'Cuts'}
+                            {Array.isArray(order.items) ? order.items.length : 0} {Array.isArray(order.items) && order.items.length === 1 ? 'Cut' : 'Cuts'}
                           </span>
-                          <span className="text-[10px] text-gray-500 truncate max-w-[150px] block" title={order.items?.map(it => `${it.quantity}x ${it.productName}`).join(', ')}>
+                          <span
+                            className="text-[10px] text-gray-500 truncate max-w-[150px] block"
+                            title={Array.isArray(order.items) ? order.items.map(it => `${it.quantity || 1}x ${it.productName || 'Chicken Cut'}`).join(', ') : 'Chicken Cut'}
+                          >
                             {Array.isArray(order.items) && order.items.length > 0
-                              ? order.items.map((it) => `${it.quantity}x ${it.productName}`).join(', ')
+                              ? order.items.map((it) => `${it.quantity || 1}x ${it.productName || 'Chicken Cut'}`).join(', ')
                               : 'Chicken Cut'}
                           </span>
                         </div>
@@ -892,7 +921,7 @@ export const AdminOrdersPage: React.FC = () => {
             <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                  Current Status: <strong className="text-brand-700 bg-brand-50 px-2 py-0.5 rounded-lg">{selectedOrder.status.replace(/_/g, ' ')}</strong>
+                  Current Status: <strong className="text-brand-700 bg-brand-50 px-2 py-0.5 rounded-lg">{(selectedOrder.status || 'PLACED').replace(/_/g, ' ')}</strong>
                 </span>
                 <div className="flex items-center space-x-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Change Status:</span>
@@ -1016,11 +1045,11 @@ export const AdminOrdersPage: React.FC = () => {
             {/* Items Breakdown with Actual Images, Quantities & Prices */}
             <div>
               <h4 className="font-bold text-xs text-charcoal uppercase tracking-wider mb-2">
-                Ordered Chicken Cuts ({selectedOrder.items?.length || 0})
+                Ordered Chicken Cuts ({Array.isArray(selectedOrder.items) ? selectedOrder.items.length : 0})
               </h4>
               <div className="divide-y divide-gray-100 bg-gray-50 rounded-2xl p-4">
-                {(Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? selectedOrder.items : []).map((it) => (
-                  <div key={it.id || it.productName} className="py-2.5 flex items-center justify-between text-xs gap-3">
+                {(Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? selectedOrder.items : []).map((it, idx) => (
+                  <div key={it.id || it.productName || idx} className="py-2.5 flex items-center justify-between text-xs gap-3">
                     <div className="flex items-center space-x-3 min-w-0">
                       <img
                         src={it.imageUrl || it.productImage || 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=800&q=80'}
@@ -1162,7 +1191,7 @@ export const AdminOrdersPage: React.FC = () => {
                     <div>
                       <span className="text-gray-400 font-bold block text-[10px]">Payment Date & Time</span>
                       <span className="font-medium text-gray-700">
-                        {new Date(selectedOrder.paymentDetails?.paidAt || selectedOrder.createdAt).toLocaleString()}
+                        {safeFormatDateTime(selectedOrder.paymentDetails?.paidAt || selectedOrder.createdAt)}
                       </span>
                     </div>
                   </>
@@ -1187,7 +1216,7 @@ export const AdminOrdersPage: React.FC = () => {
                       <div>
                         <span className="text-gray-400 font-bold block text-[10px]">Collection Timestamp</span>
                         <span className="font-medium text-gray-700">
-                          {new Date(selectedOrder.codDetails.collectedAt).toLocaleString()}
+                          {safeFormatDateTime(selectedOrder.codDetails.collectedAt)}
                         </span>
                       </div>
                     )}
@@ -1223,7 +1252,7 @@ export const AdminOrdersPage: React.FC = () => {
                           {evt.details && <p className="text-[10px] text-gray-500">{evt.details}</p>}
                         </div>
                         <span className="font-mono text-gray-400 flex-shrink-0">
-                          {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {safeFormatTime(evt.timestamp)}
                         </span>
                       </div>
                     ))}

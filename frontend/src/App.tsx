@@ -4,6 +4,7 @@ import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { PincodeModal } from './components/common/PincodeModal';
 import { CartDrawer } from './components/cart/CartDrawer';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useAuth } from './contexts/AuthContext';
 
 // Eagerly loaded for fast first paint
@@ -143,8 +144,9 @@ export const App: React.FC = () => {
       {showCustomerChrome && <Header />}
 
       <div className="flex-1">
-        <Suspense fallback={<RouteLoadingFallback />}>
-          <Routes>
+        <ErrorBoundary fallbackTitle="MPM Meat Corner encountered an unexpected issue">
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
             {/* Customer Authentication Gate */}
             <Route path="/login" element={<AuthPage />} />
 
@@ -277,6 +279,7 @@ export const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </div>
 
       {/* Global Modals & Drawers */}
