@@ -15,7 +15,9 @@ import {
   CreditCard,
   Banknote,
   ShieldCheck,
-  Check
+  Check,
+  History,
+  Calendar
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Order, DeliveryPartner, OrderStatus } from '../../types';
@@ -26,6 +28,7 @@ export const AdminOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [orderScope, setOrderScope] = useState<'TODAY' | 'HISTORY' | 'ALL'>('TODAY');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
@@ -36,6 +39,18 @@ export const AdminOrdersPage: React.FC = () => {
     customerName: string;
     amount: number;
   } | null>(null);
+
+  const isToday = (dateVal: any) => {
+    if (!dateVal) return false;
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  };
 
   const safeFormatTime = (dateVal: any) => {
     if (!dateVal) return 'Recent';
@@ -450,6 +465,16 @@ export const AdminOrdersPage: React.FC = () => {
     }
   };
 
+  const { todayOrdersCount, historyOrdersCount } = useMemo(() => {
+    let today = 0;
+    let history = 0;
+    (orders || []).forEach((o) => {
+      if (o && isToday(o.createdAt)) today++;
+      else history++;
+    });
+    return { todayOrdersCount: today, historyOrdersCount: history };
+  }, [orders]);
+
   const paymentStats = useMemo(() => {
     let onlinePaid = 0;
     let onlineCount = 0;
@@ -461,8 +486,14 @@ export const AdminOrdersPage: React.FC = () => {
     let deliveredCount = 0;
     let pendingCount = 0;
 
-    orders.forEach((o) => {
-      if (!o) return;
+    const scopedOrders = (orders || []).filter((o) => {
+      if (!o) return false;
+      if (orderScope === 'TODAY') return isToday(o.createdAt);
+      if (orderScope === 'HISTORY') return !isToday(o.createdAt);
+      return true;
+    });
+
+    scopedOrders.forEach((o) => {
       const amt = Number(o.totalAmount) || 0;
       const st = o.status || 'PLACED';
       if (st === 'DELIVERED') deliveredCount++;
@@ -498,13 +529,18 @@ export const AdminOrdersPage: React.FC = () => {
       settledRevenue,
       deliveredCount,
       pendingCount,
-      totalOrders: (orders || []).length,
+      totalOrders: scopedOrders.length,
     };
-  }, [orders]);
+  }, [orders, orderScope]);
 
   const filteredOrders = useMemo(() => {
     return (orders || []).filter((o) => {
       if (!o) return false;
+
+      // Filter by Scope: TODAY (Front) vs HISTORY
+      if (orderScope === 'TODAY' && !isToday(o.createdAt)) return false;
+      if (orderScope === 'HISTORY' && isToday(o.createdAt)) return false;
+
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase().trim();
       const ordNum = String(o.orderNumber || o.id || '').toLowerCase();
@@ -522,7 +558,7 @@ export const AdminOrdersPage: React.FC = () => {
         area.includes(q)
       );
     });
-  }, [orders, searchQuery]);
+  }, [orders, orderScope, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -618,6 +654,83 @@ export const AdminOrdersPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Primary Scope Tabs: Today's Orders (Front) vs History Page */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm">
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => setOrderScope('TODAY')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs ${
+              orderScope === 'TODAY'
+                ? 'bg-brand-700 text-white shadow-brand-700/20'
+                : 'text-gray-600 hover:text-charcoal hover:bg-gray-100'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Today's Orders (Front)</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                orderScope === 'TODAY' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {todayOrdersCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOrderScope('HISTORY')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              orderScope === 'HISTORY'
+                ? 'bg-charcoal text-white shadow'
+                : 'text-gray-600 hover:text-charcoal hover:bg-gray-100'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Order History (Past Days)</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                orderScope === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {historyOrdersCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOrderScope('ALL')}
+            className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+              orderScope === 'ALL'
+                ? 'bg-gray-800 text-white shadow'
+                : 'text-gray-500 hover:text-charcoal hover:bg-gray-100'
+            }`}
+          >
+            <span>All Orders</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                orderScope === 'ALL' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {(orders || []).length}
+            </span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-gray-500 font-medium px-2">
+          {orderScope === 'TODAY' && (
+            <span>⚡ Showing live orders placed today ({new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})</span>
+          )}
+          {orderScope === 'HISTORY' && (
+            <span>📜 Showing all past orders and history</span>
+          )}
+          {orderScope === 'ALL' && (
+            <span>📊 Showing all combined orders</span>
+          )}
+        </div>
+      </div>
+
       {/* Status Filter Tabs */}
       <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-none">
         {[
@@ -671,7 +784,11 @@ export const AdminOrdersPage: React.FC = () => {
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-gray-400">
-                    No chicken orders found matching criteria.
+                    {orderScope === 'TODAY'
+                      ? 'No customer orders placed today yet. New orders will appear here automatically.'
+                      : orderScope === 'HISTORY'
+                      ? 'No past orders in history matching criteria.'
+                      : 'No chicken orders found matching criteria.'}
                   </td>
                 </tr>
               ) : (
