@@ -13,7 +13,7 @@ import {
   Tag,
   Lock
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, subscribeToCatalogUpdates } from '../../services/api';
 import { Address } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCart } from '../../contexts/CartContext';
@@ -48,6 +48,9 @@ export const CheckoutPage: React.FC = () => {
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const unsubscribe = subscribeToCatalogUpdates(() => {
+      refreshCart();
+    });
     if (user) {
       if (user.name && !newRecipient) setNewRecipient(user.name);
       if (user.phone && !newPhone) setNewPhone(user.phone);
@@ -69,6 +72,10 @@ export const CheckoutPage: React.FC = () => {
     } else {
       setIsAddingNewAddress(true);
     }
+
+    return () => {
+      unsubscribe();
+    };
   }, [user]);
 
   if (!cart?.items || cart.items.length === 0) {

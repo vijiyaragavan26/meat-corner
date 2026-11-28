@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Cart } from '../types';
-import { api } from '../services/api';
+import { api, subscribeToCatalogUpdates } from '../services/api';
 
 interface CartContextType {
   cart: Cart | null;
@@ -75,9 +75,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshCart();
     };
     window.addEventListener('meat_corner_settings_updated', onSettingsUpdated);
+    const unsubscribeCatalog = subscribeToCatalogUpdates(() => {
+      refreshCart();
+    });
+
     return () => {
       window.removeEventListener('meat_corner_cart_cleared', onCartCleared);
       window.removeEventListener('meat_corner_settings_updated', onSettingsUpdated);
+      unsubscribeCatalog();
     };
   }, []);
 

@@ -14,7 +14,7 @@ import {
   Share2,
   Heart
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, subscribeToCatalogUpdates } from '../../services/api';
 import { Product, ProductVariant } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -39,7 +39,7 @@ export const ProductDetailPage: React.FC = () => {
   const [reviewRating, setReviewRating] = useState<number>(5);
   const [reviewSubmitted, setReviewSubmitted] = useState<boolean>(false);
 
-  useEffect(() => {
+  const loadProduct = () => {
     if (!id) return;
     setLoading(true);
     api.getProductById(id)
@@ -68,6 +68,14 @@ export const ProductDetailPage: React.FC = () => {
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadProduct();
+    const unsubscribe = subscribeToCatalogUpdates(() => {
+      loadProduct();
+    });
+    return unsubscribe;
   }, [id]);
 
   const handleAddToCart = () => {

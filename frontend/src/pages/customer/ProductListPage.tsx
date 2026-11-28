@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, Filter, Star, Plus, Check, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, subscribeToCatalogUpdates } from '../../services/api';
 import { Product, Category, ProductVariant } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -25,13 +25,13 @@ export const ProductListPage: React.FC = () => {
   // Selected weight variants for each product card
   const [selectedVariants, setSelectedVariants] = useState<Record<string, ProductVariant>>({});
 
-  useEffect(() => {
+  const loadCategories = () => {
     api.getCategories().then((res) => {
-      if (res.success) setCategories(res.data);
+      if (res && res.success) setCategories(res.data);
     });
-  }, []);
+  };
 
-  useEffect(() => {
+  const loadProducts = () => {
     setLoading(true);
     const params: Record<string, string> = {};
     if (selectedCategory) params.category = selectedCategory;
@@ -54,6 +54,19 @@ export const ProductListPage: React.FC = () => {
         }
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+    const unsubscribe = subscribeToCatalogUpdates(() => {
+      loadProducts();
+      loadCategories();
+    });
+    return unsubscribe;
   }, [selectedCategory, searchQuery, bestSellerOnly, sortBy]);
 
   const handleCategoryClick = (slug: string) => {

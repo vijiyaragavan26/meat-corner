@@ -17,7 +17,7 @@ import {
   Globe,
   Menu
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, subscribeToCatalogUpdates } from '../../services/api';
 import { Product, Category } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -33,7 +33,7 @@ export const HomePage: React.FC = () => {
   const [recommended, setRecommended] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
+  const loadHomeData = () => {
     Promise.all([
       api.getCategories(),
       api.getProducts({ bestSeller: 'true' }),
@@ -41,13 +41,21 @@ export const HomePage: React.FC = () => {
       api.getProducts({ recommended: 'true' })
     ])
       .then(([catsRes, bestRes, specRes, recRes]) => {
-        if (catsRes.success) setCategories(catsRes.data);
-        if (bestRes.success) setBestsellers(bestRes.data);
-        if (specRes.success) setTodayOffers(specRes.data);
-        if (recRes.success) setRecommended(recRes.data);
+        if (catsRes && catsRes.success) setCategories(catsRes.data);
+        if (bestRes && bestRes.success) setBestsellers(bestRes.data);
+        if (specRes && specRes.success) setTodayOffers(specRes.data);
+        if (recRes && recRes.success) setRecommended(recRes.data);
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadHomeData();
+    const unsubscribe = subscribeToCatalogUpdates(() => {
+      loadHomeData();
+    });
+    return unsubscribe;
   }, []);
 
   const handleQuickAdd = (product: Product, e: React.MouseEvent) => {

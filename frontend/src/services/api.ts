@@ -410,6 +410,70 @@ function broadcastOrderEvent(type: string, detail: any) {
   }
 }
 
+export function broadcastCatalogEvent(type: string, detail: any = {}) {
+  try {
+    const ch = new BroadcastChannel('meat_corner_catalog_sync');
+    ch.postMessage({ type, detail, timestamp: Date.now() });
+    ch.close();
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('meat_corner_catalog_updated', { detail: { type, ...detail } }));
+    window.dispatchEvent(new CustomEvent(type, { detail }));
+    try {
+      localStorage.setItem('meat_corner_last_catalog_event', JSON.stringify({ type, ...detail, timestamp: Date.now() }));
+    } catch {}
+  }
+}
+
+export function subscribeToCatalogUpdates(callback: (event?: any) => void): () => void {
+  let ch: BroadcastChannel | null = null;
+  try {
+    ch = new BroadcastChannel('meat_corner_catalog_sync');
+    ch.onmessage = (e) => {
+      callback(e.data);
+    };
+  } catch {}
+
+  const onCustomEvent = (e: any) => {
+    callback(e.detail);
+  };
+
+  const onStorage = (e: StorageEvent) => {
+    if (
+      e.key === 'meat_corner_product_overrides' ||
+      e.key === 'meat_corner_custom_products' ||
+      e.key === 'meat_corner_deleted_product_ids' ||
+      e.key === 'meat_corner_store_settings' ||
+      e.key === 'meat_corner_custom_coupons' ||
+      e.key === 'meat_corner_last_catalog_event'
+    ) {
+      callback();
+    }
+  };
+
+  const onFocus = () => {
+    callback();
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('meat_corner_catalog_updated', onCustomEvent);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+  }
+
+  return () => {
+    try {
+      if (ch) ch.close();
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('meat_corner_catalog_updated', onCustomEvent);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    }
+  };
+}
+
 function resolveItemImage(it: any): string {
   if (it.imageUrl) return it.imageUrl;
   if (it.productImage) return it.productImage;
@@ -3193,7 +3257,10 @@ export const api = {
     // 2. Unshift into in-memory store
     DEMO_PRODUCTS.unshift(newProd);
 
-    // 3. Sync to API backend
+    // 3. Immediately broadcast to customer interfaces
+    broadcastCatalogEvent('PRODUCT_CREATED', { product: newProd, id });
+
+    // 4. Sync to API backend
     return callApi('/admin/products', { method: 'POST', body: JSON.stringify(newProd) }, () => newProd);
   },
 
@@ -3218,6 +3285,10 @@ export const api = {
     }
 
     const merged = { ...body, id };
+
+    // 4. Immediately broadcast to customer interfaces
+    broadcastCatalogEvent('PRODUCT_UPDATED', { product: merged, id });
+
     return callApi('/admin/products/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => merged);
   },
 
@@ -3242,6 +3313,9 @@ export const api = {
       DEMO_PRODUCTS[dIdx].isActive = false;
     }
 
+    // 5. Immediately broadcast to customer interfaces
+    broadcastCatalogEvent('PRODUCT_DELETED', { productId: id });
+
     return callApi('/admin/products/' + id, { method: 'DELETE' }, () => ({ success: true, message: 'Product deactivated' }));
   },
 
@@ -3249,11 +3323,15 @@ export const api = {
     callApi('/admin/categories', { method: 'POST', body: JSON.stringify(body) }, () => {
       const newCat = { id: 'cat_' + Date.now(), ...body };
       DEMO_CATEGORIES.push(newCat);
+      broadcastCatalogEvent('CATEGORY_CREATED', { category: newCat });
       return newCat;
     }),
 
   updateAdminCategory: (id: string, body: any) =>
-    callApi('/admin/categories/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => body),
+    callApi('/admin/categories/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => {
+      broadcastCatalogEvent('CATEGORY_UPDATED', { id, ...body });
+      return body;
+    }),
 
   getAdminInventory: () =>
     callApi('/admin/inventory', {}, () =>
@@ -3267,8 +3345,10 @@ export const api = {
       }))
     ),
 
-  updateAdminInventory: (id: string, body: any) =>
-    callApi('/admin/inventory/' + id, { method: 'PATCH', body: JSON.stringify(body) }, () => ({ success: true })),
+  updateAdminInventory: (id: string, body: any) => {
+    broadcastCatalogEvent('INVENTORY_UPDATED', { id, ...body });
+    return callApi('/admin/inventory/' + id, { method: 'PATCH', body: JSON.stringify(body) }, () => ({ success: true, ...body }));
+  },
 
   getAdminDeliveryPartners: () =>
     callApi('/admin/delivery-partners', {}, async () => {
@@ -3609,15 +3689,22 @@ export const api = {
     ]),
 
   createAdminCoupon: (body: any) =>
-    callApi('/admin/coupons', { method: 'POST', body: JSON.stringify(body) }, () => ({
-      id: 'coup_' + Date.now(),
-      isActive: true,
-      usedCount: 0,
-      ...body,
-    })),
+    callApi('/admin/coupons', { method: 'POST', body: JSON.stringify(body) }, () => {
+      const newCoupon = {
+        id: 'coup_' + Date.now(),
+        isActive: true,
+        usedCount: 0,
+        ...body,
+      };
+      broadcastCatalogEvent('COUPON_CREATED', { coupon: newCoupon });
+      return newCoupon;
+    }),
 
   updateAdminCoupon: (id: string, body: any) =>
-    callApi('/admin/coupons/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => body),
+    callApi('/admin/coupons/' + id, { method: 'PUT', body: JSON.stringify(body) }, () => {
+      broadcastCatalogEvent('COUPON_UPDATED', { id, ...body });
+      return body;
+    }),
 
   getAdminSettings: () =>
     callApi('/admin/settings', {}, () => {
@@ -3653,6 +3740,7 @@ export const api = {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('meat_corner_settings_updated', { detail: updated }));
         }
+        broadcastCatalogEvent('SETTINGS_UPDATED', { settings: updated });
         return updated;
       } catch {
         return body;
