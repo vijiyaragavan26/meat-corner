@@ -325,33 +325,6 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
-          <form onSubmit={handleSearchSubmit}>
-            <div className="relative w-full">
-              <input
-                type="text"
-                placeholder={t('search_placeholder')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-gray-50 text-charcoal text-sm rounded-xl pl-10 pr-4 py-2.5 border border-gray-200"
-              />
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-            </div>
-          </form>
-
-          <button
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              openModal();
-            }}
-            className="w-full flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs"
-          >
-            <div className="flex items-center">
-              <MapPin className="w-4 h-4 text-brand-700 mr-2" />
-              <span>{locationName} ({pincode})</span>
-            </div>
-            <span className="text-brand-700 font-bold">Change</span>
-          </button>
-
           <div className="pt-2 border-t border-gray-100 flex flex-col space-y-2">
             {user?.role === 'ADMIN' && (
               <Link
@@ -396,6 +369,31 @@ export const Header: React.FC = () => {
               <UserIcon className="w-4 h-4 text-gray-400" />
               <span>{t('my_orders')}</span>
             </Link>
+
+            {/* Sign Out / Log Out Button */}
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  setIsMobileMenuOpen(false);
+                  navigate('/');
+                }}
+                className="w-full mt-2 px-3 py-2.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl flex items-center space-x-2 border border-red-100 transition"
+              >
+                <LogOut className="w-4 h-4 text-red-600" />
+                <span>Sign Out / Log Out</span>
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-full mt-2 px-3 py-2.5 text-sm font-bold text-white bg-brand-700 hover:bg-brand-800 rounded-xl flex items-center justify-center space-x-2 transition shadow-sm"
+              >
+                <UserIcon className="w-4 h-4 text-white" />
+                <span>Sign In / Log In</span>
+              </Link>
+            )}
           </div>
         </div>
       )}
