@@ -325,6 +325,31 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
+          {/* Replace Search & Location with Sign Out / Log Out option */}
+          {user ? (
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                setIsMobileMenuOpen(false);
+                navigate('/');
+              }}
+              className="w-full py-2.5 px-4 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl flex items-center justify-center space-x-2 border border-red-200 transition shadow-sm"
+            >
+              <LogOut className="w-4 h-4 text-red-600" />
+              <span>Sign Out / Log Out</span>
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full py-2.5 px-4 text-sm font-bold text-white bg-brand-700 hover:bg-brand-800 rounded-xl flex items-center justify-center space-x-2 transition shadow-sm"
+            >
+              <UserIcon className="w-4 h-4 text-white" />
+              <span>Sign In / Log In</span>
+            </Link>
+          )}
+
           <div className="pt-2 border-t border-gray-100 flex flex-col space-y-2">
             {user?.role === 'ADMIN' && (
               <Link
@@ -369,31 +394,6 @@ export const Header: React.FC = () => {
               <UserIcon className="w-4 h-4 text-gray-400" />
               <span>{t('my_orders')}</span>
             </Link>
-
-            {/* Sign Out / Log Out Button */}
-            {user ? (
-              <button
-                type="button"
-                onClick={() => {
-                  logout();
-                  setIsMobileMenuOpen(false);
-                  navigate('/');
-                }}
-                className="w-full mt-2 px-3 py-2.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl flex items-center space-x-2 border border-red-100 transition"
-              >
-                <LogOut className="w-4 h-4 text-red-600" />
-                <span>Sign Out / Log Out</span>
-              </button>
-            ) : (
-              <Link
-                to="/login"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="w-full mt-2 px-3 py-2.5 text-sm font-bold text-white bg-brand-700 hover:bg-brand-800 rounded-xl flex items-center justify-center space-x-2 transition shadow-sm"
-              >
-                <UserIcon className="w-4 h-4 text-white" />
-                <span>Sign In / Log In</span>
-              </Link>
-            )}
           </div>
         </div>
       )}
