@@ -357,10 +357,10 @@ export interface SupportTicket {
 const initialUsers: User[] = [
   {
     id: 'usr_admin_1',
-    name: 'Karthik Raja',
-    email: 'admin@meatcorner.in',
-    phone: '+919876543200',
-    passwordHash: '$2a$10$Fhzn7DUa3kceOlmKg.6uoOwFlNX4aURVkYSOD7dSPai0KPSE8xAeC', // Admin@123
+    name: 'Vijay',
+    email: 'vijiyaragavan26@gmail.com',
+    phone: '+917604906429',
+    passwordHash: '$2a$10$Xtbdpup09gR2Tl5Sd56urOqLsTLc7ERthwXETKoy3v0rn/Yj.YGpe', // Vijay@123
     role: 'ADMIN',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     isVerified: true,
@@ -383,10 +383,10 @@ const initialUsers: User[] = [
   },
   {
     id: 'usr_del_1',
-    name: 'Poopesh M',
+    name: 'Poopesh',
     email: 'mboopesh60@gmail.com',
     phone: '+919360761595',
-    passwordHash: '$2a$10$RVu0YpcTNA9itfvlPH7SUuWEHn1dDCh.temR5bGmZs1KqbA8b7T/u', // Delivery@123
+    passwordHash: '$2a$10$OZ8CWFL86xgF2cDxH0dc0u3uneDUPkDRDQgpq105ewOZgcZy6G7ey', // Poopesh@123
     role: 'DELIVERY_PARTNER',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
     isVerified: true,
@@ -944,7 +944,7 @@ const initialDeliveryPartners: DeliveryPartner[] = [
   {
     id: 'dp_1',
     userId: 'usr_del_1',
-    fullName: 'Poopesh M',
+    fullName: 'Poopesh',
     phone: '+919360761595',
     email: 'mboopesh60@gmail.com',
     address: '18 Perundurai Road, Kanjikovil, Erode 638116',

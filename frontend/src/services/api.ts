@@ -1223,6 +1223,7 @@ export const api = {
         cleanPhone.endsWith('9360761595') ||
         lower === 'delivery@meatcorner.in' ||
         lower === 'poopesh@meatcorner.in' ||
+        lower === 'mboopesh60@gmail.com' ||
         lower === 'poopesh'
       ) {
         if (pwd && pwd !== 'Poopesh@123' && pwd !== 'Delivery@123') {
@@ -1232,8 +1233,8 @@ export const api = {
           id: 'dp_1',
           partnerId: 'dp_1',
           userId: 'usr_del_1',
-          name: 'Poopesh M',
-          email: 'delivery@meatcorner.in',
+          name: 'Poopesh',
+          email: 'mboopesh60@gmail.com',
           phone: '+919360761595',
           role: 'DELIVERY_PARTNER',
           avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',

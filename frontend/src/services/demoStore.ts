@@ -464,7 +464,7 @@ export const DEMO_ORDERS: any[] = [
 export const DEMO_DELIVERY_PARTNERS = [
   {
     id: 'dp_1',
-    fullName: 'Poopesh M',
+    fullName: 'Poopesh',
     phone: '+91 93607 61595',
     email: 'mboopesh60@gmail.com',
     vehicleType: 'Motorcycle',
