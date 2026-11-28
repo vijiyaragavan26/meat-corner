@@ -195,7 +195,7 @@ export const Header: React.FC = () => {
             >
               <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2 transition-transform group-hover:scale-110" />
               <span className="hidden sm:inline font-semibold">{t('cart')}</span>
-              {itemCount > 0 && (
+              {Number(itemCount) > 0 && (
                 <span className="ml-1 sm:ml-2 bg-white text-brand-700 font-bold text-xs px-1.5 sm:px-2 py-0.5 rounded-full shadow-sm">
                   {itemCount}
                 </span>

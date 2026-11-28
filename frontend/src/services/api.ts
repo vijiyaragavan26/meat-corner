@@ -1821,12 +1821,26 @@ export const api = {
       return updateLiveCartPricing();
     }),
 
-  clearCart: () =>
-    callApi('/cart', { method: 'DELETE' }, () => {
-      liveCart.items = [];
-      liveCart.discountAmount = 0;
-      return updateLiveCartPricing();
-    }),
+  clearCart: async () => {
+    liveCart.items = [];
+    liveCart.discountAmount = 0;
+    const resData = updateLiveCartPricing();
+    saveLiveCart();
+    try {
+      localStorage.removeItem('meat_corner_live_cart');
+    } catch {}
+    try {
+      await callApi('/cart', { method: 'DELETE' }, () => resData);
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('meat_corner_cart_cleared'));
+    }
+    return {
+      success: true,
+      data: resData,
+      message: 'Cart cleared successfully'
+    };
+  },
 
   applyCoupon: (code: string) =>
     callApi('/cart/apply-coupon', { method: 'POST', body: JSON.stringify({ code }) }, () => {
@@ -1841,8 +1855,8 @@ export const api = {
     }),
 
   // Orders
-  createOrder: (body: any) =>
-    callApi('/orders', { method: 'POST', body: JSON.stringify(body) }, () => {
+  createOrder: async (body: any) => {
+    const res = await callApi('/orders', { method: 'POST', body: JSON.stringify(body) }, () => {
       const currentOrders = getLiveOrders();
       const addr = body.newAddress || body.deliveryAddress || {};
       let recipient = addr.recipientName || 'Valued Customer';
@@ -1964,7 +1978,22 @@ export const api = {
       syncOrderToSupabase(newOrder, items).catch(() => {});
 
       return newOrder;
-    }),
+    });
+
+    // GUARANTEED: Always clear browser live cart immediately on order completion
+    liveCart.items = [];
+    liveCart.discountAmount = 0;
+    updateLiveCartPricing();
+    saveLiveCart();
+    try {
+      localStorage.removeItem('meat_corner_live_cart');
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('meat_corner_cart_cleared'));
+    }
+
+    return res;
+  },
 
   getCustomerOrders: () =>
     callApi('/orders', {}, async () => {

@@ -274,7 +274,10 @@ export const CheckoutPage: React.FC = () => {
       }
 
       // 3. Clear cart and redirect to order confirmation
-      await refreshCart();
+      await clearCart();
+      try {
+        localStorage.removeItem('meat_corner_live_cart');
+      } catch {}
       navigate(`/orders/${order.id}/confirmed`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Could not place order. Please try again.');

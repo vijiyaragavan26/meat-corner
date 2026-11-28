@@ -2,16 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { CheckCircle2, Clock, MapPin, Package, ArrowRight, ShieldCheck, Phone } from 'lucide-react';
+import { useCart } from '../../contexts/CartContext';
 import { api } from '../../services/api';
 import { Order } from '../../types';
 
 export const OrderConfirmationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { clearCart } = useCart();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Purge cart to ensure no remaining items after completed order
+    clearCart().catch(() => {});
+    try {
+      localStorage.removeItem('meat_corner_live_cart');
+    } catch {}
+
     // Fire festive celebration confetti
     try {
       confetti({

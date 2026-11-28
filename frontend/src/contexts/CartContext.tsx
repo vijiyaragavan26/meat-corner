@@ -47,6 +47,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     refreshCart();
+
+    const onCartCleared = () => {
+      setCart({
+        id: 'cart_empty',
+        userId: 'guest',
+        items: [],
+        subtotal: 0,
+        deliveryCharge: 0,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        pricing: {
+          subtotal: 0,
+          deliveryFee: 0,
+          discount: 0,
+          tax: 0,
+          total: 0,
+          freeDeliveryThreshold: 499,
+          freeDeliveryRemaining: 499
+        }
+      } as any);
+    };
+
+    window.addEventListener('meat_corner_cart_cleared', onCartCleared);
+    return () => {
+      window.removeEventListener('meat_corner_cart_cleared', onCartCleared);
+    };
   }, []);
 
   const openDrawer = () => setIsDrawerOpen(true);
@@ -166,11 +193,31 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearCart = async () => {
+    // 0ms instantaneous optimistic state reset
+    setCart({
+      id: 'cart_empty',
+      userId: 'guest',
+      items: [],
+      subtotal: 0,
+      deliveryCharge: 0,
+      discountAmount: 0,
+      taxAmount: 0,
+      totalAmount: 0,
+      pricing: {
+        subtotal: 0,
+        deliveryFee: 0,
+        discount: 0,
+        tax: 0,
+        total: 0,
+        freeDeliveryThreshold: 499,
+        freeDeliveryRemaining: 499
+      }
+    } as any);
     try {
       const res = await api.clearCart();
-      if (res.success) setCart(res.data);
+      if (res && res.success && res.data) setCart(res.data);
     } catch (err: any) {
-      alert(err.message);
+      console.warn('Could not clear cart on backend:', err.message);
     }
   };
 
