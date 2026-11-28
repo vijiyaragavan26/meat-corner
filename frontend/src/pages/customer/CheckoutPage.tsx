@@ -47,6 +47,7 @@ export const CheckoutPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (user) {
       if (user.name && !newRecipient) setNewRecipient(user.name);
       if (user.phone && !newPhone) setNewPhone(user.phone);

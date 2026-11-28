@@ -296,6 +296,7 @@ export const CartDrawer: React.FC = () => {
                 onClick={() => {
                   closeDrawer();
                   navigate('/checkout');
+                  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
                 }}
                 className="w-full bg-brand-700 hover:bg-brand-800 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center space-x-2 shadow-lg shadow-brand-700/30 transition group"
               >

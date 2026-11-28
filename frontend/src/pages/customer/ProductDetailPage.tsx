@@ -84,6 +84,7 @@ export const ProductDetailPage: React.FC = () => {
   const handleBuyNow = () => {
     handleAddToCart();
     navigate('/checkout');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {

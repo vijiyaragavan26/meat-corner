@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
@@ -130,6 +130,17 @@ const DeliveryProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ child
   return <>{children}</>;
 };
 
+// Automatically reset scroll position to the top on every page navigation
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+
+  return null;
+};
+
 export const App: React.FC = () => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith('/admin');
@@ -140,6 +151,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <ScrollToTop />
       {/* Show Customer Header & Footer only when authenticated and on customer-facing routes */}
       {showCustomerChrome && <Header />}
 
