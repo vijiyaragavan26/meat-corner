@@ -16,7 +16,8 @@ import {
   Send,
   Eye,
   CreditCard,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCart } from '../../contexts/CartContext';
@@ -30,7 +31,7 @@ export const AccountPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'tickets' | 'profile'>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [orderFilter, setOrderFilter] = useState<'ALL' | 'ACTIVE' | 'HISTORY'>('ALL');
+  const [orderFilter, setOrderFilter] = useState<'RECENT' | 'HISTORY' | 'ALL'>('RECENT');
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<Order | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -235,12 +236,9 @@ export const AccountPage: React.FC = () => {
         const sortedOrders = [...orders].sort(
           (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
-        const activeOrders = sortedOrders.filter(
-          (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
-        );
-        const historyOrders = sortedOrders.filter(
-          (o) => o.status === 'DELIVERED' || o.status === 'CANCELLED'
-        );
+        // Customer Requirement: Recent 2 orders in front, other orders move to history
+        const recentOrders = sortedOrders.slice(0, 2);
+        const historyOrders = sortedOrders.slice(2);
 
         if (sortedOrders.length === 0) {
           return (
@@ -259,66 +257,87 @@ export const AccountPage: React.FC = () => {
         }
 
         const displayedOrders =
-          orderFilter === 'ACTIVE'
-            ? activeOrders
+          orderFilter === 'RECENT'
+            ? recentOrders
             : orderFilter === 'HISTORY'
             ? historyOrders
             : sortedOrders;
 
         return (
           <div className="space-y-6">
-            {/* Order Category Filter Pills */}
+            {/* Order Category Filter Navigation */}
             <div className="flex items-center space-x-2 overflow-x-auto pb-1">
               <button
                 type="button"
-                onClick={() => setOrderFilter('ALL')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
-                  orderFilter === 'ALL'
-                    ? 'bg-charcoal text-white shadow-xs'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                <span>All Orders</span>
-                <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-full font-mono">{sortedOrders.length}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOrderFilter('ACTIVE')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
-                  orderFilter === 'ACTIVE'
+                onClick={() => setOrderFilter('RECENT')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                  orderFilter === 'RECENT'
                     ? 'bg-brand-700 text-white shadow-xs'
                     : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                <span className="relative flex h-2 w-2">
-                  <span className={`${activeOrders.length > 0 ? 'animate-ping' : ''} absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75`}></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-600"></span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Recent Orders (Front)</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${orderFilter === 'RECENT' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  {recentOrders.length}
                 </span>
-                <span>Active Deliveries</span>
-                <span className="text-[10px] bg-brand-50 text-brand-900 px-1.5 py-0.2 rounded-full font-mono">{activeOrders.length}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setOrderFilter('HISTORY')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
                   orderFilter === 'HISTORY'
-                    ? 'bg-emerald-800 text-white shadow-xs'
+                    ? 'bg-charcoal text-white shadow-xs'
                     : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
                 <span>Order History</span>
-                <span className="text-[10px] bg-gray-100 text-gray-800 px-1.5 py-0.2 rounded-full font-mono">{historyOrders.length}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${orderFilter === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  {historyOrders.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrderFilter('ALL')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                  orderFilter === 'ALL'
+                    ? 'bg-gray-800 text-white shadow-xs'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <span>All Orders</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${orderFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  {sortedOrders.length}
+                </span>
               </button>
             </div>
+
+            {/* Empty state for history filter */}
+            {orderFilter === 'HISTORY' && historyOrders.length === 0 && (
+              <div className="bg-white rounded-3xl p-10 text-center border border-gray-100 space-y-3">
+                <Clock className="w-10 h-10 text-gray-300 mx-auto" />
+                <h4 className="font-bold text-sm text-charcoal">No Older Orders in History</h4>
+                <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                  All your placed orders ({recentOrders.length}) are currently shown in the Recent Orders front section.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setOrderFilter('RECENT')}
+                  className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl transition inline-flex items-center space-x-1 shadow-xs"
+                >
+                  <span>← Back to Recent Orders</span>
+                </button>
+              </div>
+            )}
 
             {/* Main Orders Display */}
             <div className="space-y-4">
               {displayedOrders.map((order, idx) => {
                 const isActive = order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
-                const isLatest = idx === 0 && orderFilter === 'ALL';
+                const isRecentView = orderFilter === 'RECENT';
 
                 return (
                   <div
@@ -332,9 +351,15 @@ export const AccountPage: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
                       <div className="flex items-center space-x-2">
                         <span className="text-xs font-mono font-black text-charcoal">{order.orderNumber}</span>
-                        {isLatest && (
-                          <span className="text-[9px] font-black uppercase tracking-wider bg-brand-700 text-white px-2 py-0.5 rounded-full">
-                            Latest Order
+                        {isRecentView && (
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-brand-700 text-white px-2 py-0.5 rounded-full flex items-center space-x-1">
+                            <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                            <span>Recent Order #{idx + 1}</span>
+                          </span>
+                        )}
+                        {orderFilter === 'HISTORY' && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+                            Past Order #{idx + 1}
                           </span>
                         )}
                         <span className="text-xs text-gray-400">
@@ -433,6 +458,31 @@ export const AccountPage: React.FC = () => {
                 );
               })}
             </div>
+
+            {/* Earlier Orders Moved to History Prompt Banner */}
+            {orderFilter === 'RECENT' && historyOrders.length > 0 && (
+              <div className="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 border border-gray-200 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center space-x-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-charcoal text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <Clock className="w-5 h-5 text-gray-200" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-charcoal">Earlier Orders Moved to Order History</h4>
+                    <p className="text-[11px] text-gray-500">
+                      Showing your 2 most recent active orders in front. You have {historyOrders.length} previous order{historyOrders.length > 1 ? 's' : ''} in your history.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOrderFilter('HISTORY')}
+                  className="px-4 py-2.5 bg-charcoal hover:bg-black text-white font-bold text-xs rounded-xl transition flex items-center space-x-1.5 self-start sm:self-auto shadow-xs"
+                >
+                  <span>Open Order History ({historyOrders.length})</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Historical Order Full Details Modal */}
             {selectedHistoryOrder && (
