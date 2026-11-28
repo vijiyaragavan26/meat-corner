@@ -757,8 +757,8 @@ async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
             : (Number(dp.totalDeliveries) || 0);
           return {
             id: dp.id,
-            name: isPoopesh ? 'Poopesh M' : (dp.fullName || dp.name),
-            fullName: isPoopesh ? 'Poopesh M' : (dp.fullName || dp.name),
+            name: isPoopesh ? 'Poopesh' : (dp.fullName || dp.name),
+            fullName: isPoopesh ? 'Poopesh' : (dp.fullName || dp.name),
             phone: isPoopesh ? '+91 93607 61595' : dp.phone,
             email: isPoopesh ? 'mboopesh60@gmail.com' : dp.email,
             vehicleType: dp.vehicleType || 'Motorcycle',
@@ -773,7 +773,7 @@ async function fetchSupabaseDeliveryPartners(): Promise<any[]> {
             currentLat: Number(dp.currentLat) || 11.3832,
             currentLng: Number(dp.currentLng) || 77.5968,
           };
-        });
+        }).filter((dp: any) => dp.id === 'dp_1' || (dp.phone && dp.phone.includes('9360761595')) || (dp.name && dp.name.toLowerCase().includes('poopesh')));
       }
     }
   } catch (e) {

@@ -393,19 +393,6 @@ const initialUsers: User[] = [
     isActive: true,
     createdAt: '2026-11-10T09:05:15.763Z',
     updatedAt: '2026-11-13T10:46:28.000Z'
-  },
-  {
-    id: 'usr_del_2',
-    name: 'Senthil Kumar',
-    email: 'delivery2@meatcorner.in',
-    phone: '+919876543202',
-    passwordHash: '$2a$10$RVu0YpcTNA9itfvlPH7SUuWEHn1dDCh.temR5bGmZs1KqbA8b7T/u', // Delivery@123
-    role: 'DELIVERY_PARTNER',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-    isVerified: true,
-    isActive: true,
-    createdAt: '2026-11-10T09:05:15.763Z',
-    updatedAt: '2026-11-13T10:46:28.000Z'
   }
 ];
 
@@ -959,27 +946,6 @@ const initialDeliveryPartners: DeliveryPartner[] = [
     commissionRate: 40.0,
     totalDeliveries: 42,
     rating: 4.9,
-    createdAt: '2026-11-10T09:05:15.763Z',
-    updatedAt: '2026-11-13T10:46:28.000Z'
-  },
-  {
-    id: 'dp_2',
-    userId: 'usr_del_2',
-    fullName: 'Senthil Kumar',
-    phone: '+919876543202',
-    email: 'delivery2@meatcorner.in',
-    address: '45 Bhavani Road, Erode 638052',
-    drivingLicenseNo: 'TN33-20210088412',
-    vehicleType: 'Two-Wheeler (Scooter)',
-    vehicleNumber: 'TN 33 AB 7890',
-    approvalStatus: 'PENDING',
-    isOnline: false,
-    isAvailable: true,
-    currentLat: 11.3789,
-    currentLng: 77.5912,
-    commissionRate: 40.0,
-    totalDeliveries: 0,
-    rating: 5.0,
     createdAt: '2026-11-10T09:05:15.763Z',
     updatedAt: '2026-11-13T10:46:28.000Z'
   }

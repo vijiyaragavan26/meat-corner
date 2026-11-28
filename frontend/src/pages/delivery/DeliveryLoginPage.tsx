@@ -68,6 +68,12 @@ export const DeliveryLoginPage: React.FC = () => {
         logout();
       }
 
+      const cleanPhone = identifier.replace(/\D/g, '');
+      const lower = identifier.toLowerCase().trim();
+      if (!cleanPhone.endsWith('9360761595') && lower !== 'mboopesh60@gmail.com' && lower !== 'delivery@meatcorner.in' && lower !== 'poopesh') {
+        throw new Error('Access denied. Only registered delivery partner (+91 93607 61595 - Poopesh) is authorized to access this portal.');
+      }
+
       const authenticatedUser = await login({ identifier, email: identifier, password });
       if (authenticatedUser.role !== 'DELIVERY_PARTNER' && authenticatedUser.role !== 'ADMIN') {
         throw new Error('Access denied. Valid delivery partner credentials required.');

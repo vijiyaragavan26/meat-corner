@@ -476,18 +476,4 @@ export const DEMO_DELIVERY_PARTNERS = [
     currentLng: 77.5950,
     rating: 4.88,
   },
-  {
-    id: 'dp_2',
-    fullName: 'Senthil Kumar',
-    phone: '+919876543202',
-    email: 'delivery2@meatcorner.in',
-    vehicleType: 'Scooter',
-    vehicleNumber: 'TN 33 CJ 9132',
-    approvalStatus: 'APPROVED',
-    isOnline: true,
-    isAvailable: true,
-    currentLat: 11.3780,
-    currentLng: 77.5900,
-    rating: 4.92,
-  },
 ];

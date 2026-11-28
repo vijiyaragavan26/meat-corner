@@ -34158,27 +34158,7 @@ var initialDeliveryPartners = [
     rating: 4.9,
     createdAt: "2026-11-10T09:05:15.763Z",
     updatedAt: "2026-11-13T10:46:28.000Z"
-  },
-  {
-    id: "dp_2",
-    userId: "usr_del_2",
-    fullName: "Senthil Kumar",
-    phone: "+919876543202",
-    email: "delivery2@meatcorner.in",
-    address: "45 Bhavani Road, Erode 638052",
-    drivingLicenseNo: "TN33-20210088412",
-    vehicleType: "Two-Wheeler (Scooter)",
-    vehicleNumber: "TN 33 AB 7890",
-    approvalStatus: "PENDING",
-    isOnline: false,
-    isAvailable: true,
-    currentLat: 11.3789,
-    currentLng: 77.5912,
-    commissionRate: 40,
-    totalDeliveries: 0,
-    rating: 5,
-    createdAt: "2026-11-10T09:05:15.763Z",
-    updatedAt: "2026-11-13T10:46:28.000Z"
+  }
   }
 ];
 var initialCoupons = [
